@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - uses: astral-sh/setup-uv@v6
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Set up Python ${{ matrix.python-version }}
