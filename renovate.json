@@ -13,8 +13,7 @@
         "SERVER_VERSION = \"(?<currentValue>.+?)\""
       ],
       "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "github/copilot-language-server-release",
-      "versioningTemplate": "regex:^(?<major>\\d+)-(?<minor>\\d+)-(?<patch>\\d+)$"
+      "packageNameTemplate": "github/copilot-language-server-release"
     }
   ]
 }
