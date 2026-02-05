@@ -11,7 +11,7 @@ dependencies = [
   "requests>=2,<3",
   "typing-extensions>=4.12",
   "watchdog>=4,<5",
-  "wcmatch>=8,<9",
+  "wcmatch>=10,<11",
 ]
 
 [dependency-groups]
