@@ -222,8 +222,8 @@ class CopilotPlugin(AbstractPlugin):
                 "version": cls.get_version(),
             },
         }
-        if networkProxy := parse_proxy(configuration.settings.get("proxy") or ""):
-            editor_info["networkProxy"] = networkProxy
+        if network_proxy := parse_proxy(configuration.settings.get("proxy") or ""):
+            editor_info["networkProxy"] = network_proxy
 
         configuration.init_options.update(editor_info)
         return None
