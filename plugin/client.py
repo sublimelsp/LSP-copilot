@@ -35,7 +35,7 @@ from .helpers import (
     preprocess_completions,
     preprocess_panel_completions,
 )
-from .log import log_info, log_warning
+from .log import log_error, log_info, log_warning
 from .template import load_string_template
 from .types import (
     AccountStatus,
@@ -55,6 +55,7 @@ from .utils import (
     all_windows,
     debounce,
     decompress_buffer,
+    find_view_by_id,
     get_session_setting,
     rmtree_ex,
     simple_urlopen,
@@ -107,6 +108,9 @@ class CopilotPlugin(AbstractPlugin):
     )
 
     _activity_indicator: ActivityIndicator | None = None
+    _server_status_message: str = ""
+    _server_status_kind: str = ""
+    _feature_flags: CopilotPayloadFeatureFlagsNotification | None = None
 
     def __init__(self, session: weakref.ref[Session]) -> None:
         super().__init__(session)
@@ -115,6 +119,9 @@ class CopilotPlugin(AbstractPlugin):
             self.window_attrs[sess.window].client = self
 
         self._activity_indicator = ActivityIndicator(self.update_status_bar_text)
+        self._server_status_message = ""
+        self._server_status_kind = ""
+        self._feature_flags = None
 
         # Note that ST persists view settings after ST is closed. If the user closes ST
         # during awaiting Copilot's response, the internal state management will be corrupted.
@@ -326,6 +333,8 @@ class CopilotPlugin(AbstractPlugin):
         variables: dict[str, Any] = {
             "server_version": self.get_version(),
             "server_version_gh": version_manager.server_version,
+            "server_status_message": self._server_status_message,
+            "server_status_kind": self._server_status_kind,
         }
 
         if extra_variables:
@@ -364,11 +373,19 @@ class CopilotPlugin(AbstractPlugin):
 
     @notification_handler(NTFY_FEATURE_FLAGS_NOTIFICATION)
     def _handle_feature_flags_notification(self, payload: CopilotPayloadFeatureFlagsNotification) -> None:
-        pass
+        self._feature_flags = payload
 
     @notification_handler(NTFY_LOG_MESSAGE)
     def _handle_log_message_notification(self, payload: CopilotPayloadLogMessage) -> None:
-        pass
+        level = payload.get("level", 3)
+        msg = payload.get("message", "")
+        log_func = log_info
+        if level <= 1:
+            log_func = log_error
+        elif level == 2:
+            log_func = log_warning
+
+        log_func(f"[Server Log] {msg}")
 
     @notification_handler(NTFY_PANEL_SOLUTION)
     def _handle_panel_solution_notification(self, payload: CopilotPayloadPanelSolution) -> None:
@@ -392,7 +409,9 @@ class CopilotPlugin(AbstractPlugin):
 
     @notification_handler(NTFY_STATUS_NOTIFICATION)
     def _handle_status_notification_notification(self, payload: CopilotPayloadStatusNotification) -> None:
-        pass
+        self._server_status_message = payload.get("message", "")
+        self._server_status_kind = payload.get("status", "")
+        self.update_status_bar_text()
 
     @request_handler(REQ_CONVERSATION_CONTEXT)
     def _handle_conversation_context_request(
@@ -400,7 +419,21 @@ class CopilotPlugin(AbstractPlugin):
         payload: CopilotPayloadConversationContext,
         respond: Callable[[Any], None],
     ) -> None:
-        respond(None)  # what?
+        if not (session := self.weaksession()):
+            return
+
+        skill_id = payload.get("skillId")
+        if (
+            (skill_id == "current-editor")
+            and (window := session.window)
+            and (wcm := WindowConversationManager(window))
+            and (view := find_view_by_id(wcm.last_active_view_id))
+            and (doc := prepare_completion_request_doc(view))
+        ):
+            respond(doc)
+            return
+
+        respond(None)
 
     @_guard_view()
     @debounce()

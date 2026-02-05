@@ -258,6 +258,7 @@ class _ConversationEntry:
                         "copilot_conversation_rating_shim",
                         {"turn_id": entry["turnId"], "rating": -1},
                     ),
+                    "warnings": entry.get("warnings", []),
                 }
                 for entry in conversations_entries
             ],
@@ -290,6 +291,8 @@ class _ConversationEntry:
                 elif is_inside_code_block:
                     current_entry["codeBlocks"].append(reply)
                 current_entry["messages"].append(reply)
+                if warnings := entry.get("warnings"):
+                    current_entry["warnings"].extend(warnings)
             else:
                 if current_entry:
                     transformed_conversation.append(current_entry)
@@ -300,6 +303,7 @@ class _ConversationEntry:
                     "codeBlockIndices": [],
                     "codeBlocks": [],
                     "references": [],
+                    "warnings": entry.get("warnings", [])[:],
                 }
                 if kind == "report":
                     current_entry["references"] = self.wcm.conversation[idx - 1].get("references", [])

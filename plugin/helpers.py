@@ -226,21 +226,20 @@ def prepare_conversation_turn_request(
         return None
 
     # References can technicaly be across multiple files
-    # TODO: Support references across multiple files
     references: list[CopilotRequestConversationTurnReference | CopilotGitHubWebSearch] = []
-    visible_range = st_region_to_lsp_range(view.visible_region(), view)
     views.append(view)
     for view_ in views:
         if not (selection := view_.sel()[0]) or view_.substr(selection).isspace():
             continue
 
+        file_path = view_.file_name()
         references.append({
             "type": "file",
             "status": "included",  # included, blocked, notfound, empty
-            "uri": filename_to_uri(file_path) if (file_path := view_.file_name()) else f"buffer:{view.buffer().id()}",
+            "uri": filename_to_uri(file_path) if file_path else f"buffer:{view_.buffer().id()}",
             "position": st_point_to_lsp_position(selection.begin(), view_),
-            "range": st_region_to_lsp_range(selection, view),
-            "visibleRange": visible_range,
+            "range": st_region_to_lsp_range(selection, view_),
+            "visibleRange": st_region_to_lsp_range(view_.visible_region(), view_),
             "selection": st_region_to_lsp_range(selection, view_),
             "openedAt": None,
             "activeAt": None,
