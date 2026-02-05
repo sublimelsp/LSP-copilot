@@ -332,8 +332,8 @@ class CopilotPlugin(AbstractPlugin):
             return
 
         variables: dict[str, Any] = {
-            "server_version": self.get_version(),
-            "server_version_gh": version_manager.server_version,
+            "client_version": self.get_version(),
+            "server_version": version_manager.server_version,
             "server_status_message": self._server_status_message,
             "server_status_kind": self._server_status_kind,
         }
