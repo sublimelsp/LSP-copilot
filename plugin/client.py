@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import io
 import json
+import os
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -173,6 +174,8 @@ class CopilotPlugin(AbstractPlugin):
             filename=version_manager.THIS_TARBALL_NAME,
             dst_dir=cls.versioned_server_dir(),
         )
+        # make the server binary executable (required on Mac/Linux)
+        os.chmod(cls.server_path(), 0o755)
 
     @classmethod
     def can_start(
