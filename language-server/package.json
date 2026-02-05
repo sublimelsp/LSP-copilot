@@ -1,6 +1,6 @@
 {
     "private": true,
     "dependencies": {
-        "copilot-node-server": "^1.41.0"
+        "@github/copilot-language-server": "^1.421.0"
     }
 }

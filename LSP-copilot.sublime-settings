@@ -1,7 +1,6 @@
 {
 	"command": [
-		"${node_bin}",
-		"${server_path}",
+		"$server_path",
 		"--stdio"
 	],
 	"schemes": [
