@@ -1,8 +1,9 @@
 import sublime
-from .core.constants import ST_VERSION as ST_VERSION
+from ..protocol import InlayHint as InlayHint, InlayHintLabelPart as InlayHintLabelPart, MarkupContent as MarkupContent
+from .core.constants import RequestFlags as RequestFlags, ST_VERSION as ST_VERSION
 from .core.css import css as css
 from .core.edit import apply_text_edits as apply_text_edits
-from .core.protocol import InlayHint as InlayHint, InlayHintLabelPart as InlayHintLabelPart, MarkupContent as MarkupContent, Request as Request
+from .core.protocol import Request as Request
 from .core.registry import LspTextCommand as LspTextCommand, LspWindowCommand as LspWindowCommand
 from .core.sessions import Session as Session
 from .core.settings import userprefs as userprefs

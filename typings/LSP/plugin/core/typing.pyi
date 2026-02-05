@@ -1,5 +1,1 @@
-from enum import Enum, IntEnum as IntEnum, IntFlag as IntFlag
-
-class StrEnum(str, Enum):
-    __format__ = ...
-    __str__ = ...
+from enum import Enum as Enum, IntEnum as IntEnum, IntFlag as IntFlag, StrEnum as StrEnum

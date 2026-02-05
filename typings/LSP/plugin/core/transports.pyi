@@ -6,6 +6,7 @@ from .constants import ST_PLATFORM as ST_PLATFORM
 from .logging import debug as debug, exception_log as exception_log
 from .types import TCP_CONNECT_TIMEOUT as TCP_CONNECT_TIMEOUT, TransportConfig as TransportConfig
 from _typeshed import Incomplete
+from queue import Queue
 from typing import Any, Callable, Generic, IO, Protocol, TypeVar
 
 T = TypeVar('T')
@@ -45,7 +46,7 @@ class ProcessTransport(Transport[T]):
     _reader_thread: Incomplete
     _writer_thread: Incomplete
     _callback_object: Incomplete
-    _send_queue: Incomplete
+    _send_queue: Queue[T | None]
     _stderr_thread: Incomplete
     def __init__(self, name: str, process: subprocess.Popen | None, socket: socket.socket | None, reader: IO[bytes], writer: IO[bytes], stderr: IO[bytes] | None, processor: AbstractProcessor[T], callback_object: TransportCallbacks[T]) -> None: ...
     def send(self, payload: T) -> None: ...

@@ -13,10 +13,10 @@ class LspSettingsChangeListener(metaclass=ABCMeta):
     def on_userprefs_updated(self) -> None: ...
 
 class ClientConfigs:
-    all: Incomplete
-    external: Incomplete
-    _listener: Incomplete
-    _clients_hash: Incomplete
+    all: dict[str, ClientConfig]
+    external: dict[str, ClientConfig]
+    _listener: LspSettingsChangeListener | None
+    _clients_hash: int | None
     def __init__(self) -> None: ...
     def _notify_clients_listener(self, config_name: str | None = None) -> None: ...
     def _notify_userprefs_listener(self) -> None: ...
