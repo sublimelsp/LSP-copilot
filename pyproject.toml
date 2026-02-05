@@ -10,7 +10,7 @@ dependencies = [
   "more-itertools>=10,<11",
   "requests>=2,<3",
   "typing-extensions>=4.12",
-  "watchdog>=4,<5",
+  "watchdog>=6,<7",
   "wcmatch>=10,<11",
 ]
 
