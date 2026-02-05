@@ -303,7 +303,7 @@ class _ConversationEntry:
                     "codeBlockIndices": [],
                     "codeBlocks": [],
                     "references": [],
-                    "warnings": entry.get("warnings", [])[:],
+                    "warnings": entry.get("warnings", []),
                 }
                 if kind == "report":
                     current_entry["references"] = self.wcm.conversation[idx - 1].get("references", [])

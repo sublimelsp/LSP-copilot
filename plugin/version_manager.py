@@ -48,9 +48,9 @@ class VersionManager:
     def server_download_url(self) -> str:
         """The URL for downloading the server tarball."""
         return self.DOWNLOAD_URL_TEMPLATE.format(
-            tarball_name=self.THIS_TARBALL_NAME,
+            tarball_name=self.THIS_TARBALL_NAME.format(version=self.server_version),
             version=self.server_version,
-        ).format(version=self.server_version)
+        )
 
 
 version_manager = VersionManager()
