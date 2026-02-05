@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import json
 from functools import cached_property
 
-import jmespath
-import sublime
-
-from .constants import PACKAGE_NAME, PLATFORM_ARCH
+from .constants import PLATFORM_ARCH, SERVER_VERSION
 
 
 class VersionManager:
@@ -40,9 +36,7 @@ class VersionManager:
     @cached_property
     def server_version(self) -> str:
         """The server version without a "v" prefix."""
-        lock_file_content = sublime.load_resource(f"Packages/{PACKAGE_NAME}/language-server/package-lock.json")
-        data = json.loads(lock_file_content)
-        return jmespath.search('packages."node_modules/@github/copilot-language-server".version', data) or ""
+        return SERVER_VERSION.lstrip("v")
 
     @cached_property
     def server_download_url(self) -> str:

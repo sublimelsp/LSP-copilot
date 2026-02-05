@@ -196,8 +196,6 @@ class CopilotPlugin(AbstractPlugin):
         workspace_folders: list[WorkspaceFolder],
         configuration: ClientConfig,
     ) -> str | None:
-        super().on_pre_start(window, initiating_view, workspace_folders, configuration)
-
         def parse_proxy(proxy: str) -> NetworkProxy | None:
             # in the form of "username:password@host:port" or "host:port"
             if not proxy:
@@ -213,7 +211,7 @@ class CopilotPlugin(AbstractPlugin):
 
         editor_info: dict[str, Any] = {
             "editorInfo": {
-                "name": "vscode",
+                "name": "Sublime Text",
                 "version": sublime.version(),
             },
             "editorPluginInfo": {
