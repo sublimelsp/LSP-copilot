@@ -708,6 +708,16 @@ class CopilotConversationCloseCommand(CopilotWindowCommand):
         WindowConversationManager(window).close()
 
 
+class CopilotEditConversationCloseCommand(CopilotWindowCommand):
+    def run(self, window_id: int | None = None) -> None:
+        if not window_id:
+            return
+        if not (window := find_window_by_id(window_id)):
+            return
+
+        WindowEditConversationManager(window).close()
+
+
 class CopilotConversationRatingShimCommand(CopilotWindowCommand):
     def run(self, turn_id: str, rating: int) -> None:
         wcm = WindowConversationManager(self.window)
