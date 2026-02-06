@@ -315,12 +315,13 @@ class CopilotModel(TypedDict, total=True):
 #  Copilot Edit Chat Types   #
 # --------------------------- #
 
+
 class CopilotPayloadEditConversationCreate(TypedDict, total=True):
     conversationId: str
     """Unique identifier for the edit conversation"""
     turnId: str
     """Identifier for the initial turn in the edit conversation"""
-    
+
 
 class CopilotPayloadEditConversationTurn(TypedDict, total=True):
     conversationId: str
@@ -333,7 +334,7 @@ class CopilotPayloadEditConversationTurn(TypedDict, total=True):
     """Metadata annotations for the turn"""
     references: list[CopilotRequestConversationTurnReference | CopilotGitHubWebSearch]
     """References to code or search results"""
-    
+
 
 class CopilotRequestEditConversationTurn(TypedDict, total=True):
     conversationId: str

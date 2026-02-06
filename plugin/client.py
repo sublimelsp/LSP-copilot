@@ -4,6 +4,7 @@ import functools
 import io
 import json
 import os
+import uuid
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,16 +12,18 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
-import uuid
 
 import sublime
 from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
 from lsp_utils import notification_handler, request_handler
-from LSP.plugin.core.protocol import Point, Range
-from LSP.plugin.core.sessions import SessionViewProtocol
-from LSP.plugin.core.url import filename_to_uri
 
 from .constants import (
+    EDIT_STATUS_BEGIN,
+    EDIT_STATUS_CODE_GENERATED,
+    EDIT_STATUS_END,
+    EDIT_STATUS_NO_CODE_BLOCKS,
+    EDIT_STATUS_OVERALL_DESCRIPTION,
+    EDIT_STATUS_PLAN_GENERATED,
     NTFY_FEATURE_FLAGS_NOTIFICATION,
     NTFY_LOG_MESSAGE,
     NTFY_PANEL_SOLUTION,
@@ -28,24 +31,15 @@ from .constants import (
     NTFY_STATUS_NOTIFICATION,
     PACKAGE_NAME,
     REQ_CHECK_STATUS,
-    REQ_CONVERSATION_CONTEXT,
-    REQ_GET_COMPLETIONS,
-    REQ_GET_COMPLETIONS_CYCLING,
-    REQ_GET_VERSION,
-    REQ_SET_EDITOR_INFO,
-    REQ_CONTEXT_REGISTER_PROVIDERS,
     REQ_CONVERSATION_AGENTS,
+    REQ_CONVERSATION_CONTEXT,
     REQ_CONVERSATION_PRECONDITIONS,
     REQ_CONVERSATION_TEMPLATES,
+    REQ_COPILOT_MODELS,
+    REQ_GET_COMPLETIONS,
+    REQ_GET_COMPLETIONS_CYCLING,
     REQ_GET_PANEL_COMPLETIONS,
     REQ_NOTIFY_SHOWN,
-    REQ_COPILOT_MODELS,
-    EDIT_STATUS_BEGIN,
-    EDIT_STATUS_END,
-    EDIT_STATUS_PLAN_GENERATED,
-    EDIT_STATUS_OVERALL_DESCRIPTION,
-    EDIT_STATUS_CODE_GENERATED,
-    EDIT_STATUS_NO_CODE_BLOCKS,
 )
 from .helpers import (
     ActivityIndicator,
@@ -55,7 +49,7 @@ from .helpers import (
     preprocess_completions,
     preprocess_panel_completions,
 )
-from .log import log_debug, log_error, log_info, log_warning
+from .log import log_error, log_info, log_warning
 from .template import load_string_template
 from .types import (
     AccountStatus,
@@ -70,7 +64,12 @@ from .types import (
     NetworkProxy,
     T_Callable,
 )
-from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager, WindowEditConversationManager
+from .ui import (
+    ViewCompletionManager,
+    ViewPanelCompletionManager,
+    WindowConversationManager,
+    WindowEditConversationManager,
+)
 from .utils import (
     all_views,
     all_windows,
@@ -81,7 +80,6 @@ from .utils import (
     rmtree_ex,
     simple_urlopen,
     status_message,
-    find_window_by_id,
 )
 from .version_manager import version_manager
 
@@ -374,10 +372,10 @@ class CopilotPlugin(AbstractPlugin):
         if notification.method == "$/progress":
             token = notification.params.get("token", "")
             params = notification.params.get("value")
-            
+
             if not params:
                 return
-                
+
             if token.startswith("copilot_chat://"):
                 self._handle_chat_progress(token, params)
             elif token.startswith("copilot_pedit://"):
@@ -388,10 +386,10 @@ class CopilotPlugin(AbstractPlugin):
         window = WindowConversationManager.find_window_by_token_id(token)
         if not window:
             return
-            
+
         wcm = WindowConversationManager(window)
         needs_update = False
-        
+
         if params.get("kind") == "end":
             wcm.is_waiting = False
             needs_update = True
@@ -407,7 +405,7 @@ class CopilotPlugin(AbstractPlugin):
         if followup := params.get("followUp"):
             wcm.follow_up = followup.get("message", "")
             needs_update = True
-            
+
         if needs_update:
             wcm.update()
 
@@ -416,15 +414,15 @@ class CopilotPlugin(AbstractPlugin):
         window = WindowConversationManager.find_window_by_token_id(token)
         if not window:
             return
-            
+
         wecm = WindowEditConversationManager(window)
         needs_update = False
-        
+
         for update in params:
             if "editConversationId" in update:
                 wecm.conversation_id = update["editConversationId"]
                 needs_update = True
-                
+
                 # Handle different file generation statuses
                 status = update.get("fileGenerationStatus")
                 if status == EDIT_STATUS_BEGIN:
@@ -438,16 +436,12 @@ class CopilotPlugin(AbstractPlugin):
                     self._handle_edit_description_response(wecm, update)
                 elif status == EDIT_STATUS_CODE_GENERATED:
                     self._handle_code_generated_response(wecm, update)
-                    
+
         if needs_update:
             wecm.update()
 
     def _create_conversation_entry(
-        self, 
-        conversation_id: str, 
-        reply: str, 
-        turn_id: str | None = None,
-        kind: str = "report"
+        self, conversation_id: str, reply: str, turn_id: str | None = None, kind: str = "report"
     ) -> CopilotPayloadConversationEntry:
         """Helper method to create a standardized conversation entry."""
         return {
@@ -463,11 +457,7 @@ class CopilotPlugin(AbstractPlugin):
 
     def _handle_no_code_blocks_response(self, wecm: WindowEditConversationManager, update: dict[str, Any]) -> None:
         """Handle the no-code-blocks-found response."""
-        entry = self._create_conversation_entry(
-            wecm.conversation_id,
-            update["rawResponse"],
-            update.get("editTurnId")
-        )
+        entry = self._create_conversation_entry(wecm.conversation_id, update["rawResponse"], update.get("editTurnId"))
         wecm.append_conversation_entry(entry)
         wecm.is_waiting = False
 
@@ -475,9 +465,7 @@ class CopilotPlugin(AbstractPlugin):
         """Handle edit plan or description generated responses."""
         if "editDescription" in update:
             entry = self._create_conversation_entry(
-                wecm.conversation_id,
-                update["editDescription"],
-                update.get("editTurnId")
+                wecm.conversation_id, update["editDescription"], update.get("editTurnId")
             )
             # Use annotations to store metadata for template processing
             status = update.get("fileGenerationStatus")
@@ -485,27 +473,23 @@ class CopilotPlugin(AbstractPlugin):
                 entry["annotations"] = ["edit-plan"]
             elif status == EDIT_STATUS_OVERALL_DESCRIPTION:
                 entry["annotations"] = ["edit-description"]
-            
+
             wecm.append_conversation_entry(entry)
 
     def _handle_code_generated_response(self, wecm: WindowEditConversationManager, update: dict[str, Any]) -> None:
         """Handle updated code generated responses."""
         if "partialText" not in update:
             return
-            
+
         # Format the code with proper markdown code fence
         language_id = update.get("languageId", "")
         code_content = update["partialText"]
         markdown_reply = f"```{language_id}\n{code_content}\n```"
-        
+
         # Add conversation entry
-        entry = self._create_conversation_entry(
-            wecm.conversation_id,
-            markdown_reply,
-            update.get("editTurnId")
-        )
+        entry = self._create_conversation_entry(wecm.conversation_id, markdown_reply, update.get("editTurnId"))
         wecm.append_conversation_entry(entry)
-        
+
         # Add as a pending edit for the entire file
         self._add_full_file_edit(wecm, code_content)
 
@@ -514,19 +498,16 @@ class CopilotPlugin(AbstractPlugin):
         source_view = wecm.get_source_view()
         if not source_view:
             return
-            
+
         # Calculate the range for the entire file
         file_content = source_view.substr(sublime.Region(0, source_view.size()))
-        lines = file_content.split('\n')
+        lines = file_content.split("\n")
         last_line = len(lines) - 1
         last_char = len(lines[-1]) if lines else 0
-        
+
         wecm.add_pending_edit({
-            "range": {
-                "start": {"line": 0, "character": 0},
-                "end": {"line": last_line, "character": last_char}
-            },
-            "newText": code_content
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": last_line, "character": last_char}},
+            "newText": code_content,
         })
 
     @notification_handler(NTFY_FEATURE_FLAGS_NOTIFICATION)

@@ -57,11 +57,11 @@ REQ_TEXT_DOCUMENT_DID_FOCUS = "textDocument/didFocus"
 # {
 #         textDocument: {
 #             uri: string;
-    # },
+#     },
 #         position: {
-    #     line: I.Integer({ minimum: 0 }),
-    #     character: I.Integer({ minimum: 0 }),
-    # },
+#         line: I.Integer({ minimum: 0 }),
+#         character: I.Integer({ minimum: 0 }),
+#     },
 #         formattingOptions: I.Optional(
 #             I.Object({
 #                 tabSize: I.Optional(I.Union([I.Integer({ minimum: 1 }), I.String()])),
@@ -69,15 +69,15 @@ REQ_TEXT_DOCUMENT_DID_FOCUS = "textDocument/didFocus"
 #             }),
 #         ),
 #         context: {
-            #     triggerKind: "Invoked" or "Automatic",
-            #     selectedCompletionInfo: I.Optional(
-            #         I.Object({
-            #             text: I.String(),
-            #             range: { start: {line: character}, end: wl },
-            #             tooltipSignature: I.Optional(I.String()),
-            #         }),
-            #     ),
-            # },
+#                 triggerKind: "Invoked" or "Automatic",
+#                 selectedCompletionInfo: I.Optional(
+#                     I.Object({
+#                         text: I.String(),
+#                         range: { start: {line: character}, end: wl },
+#                         tooltipSignature: I.Optional(I.String()),
+#                     }),
+#                 ),
+#             },
 #         data: {
 # "message": "string",
 # },

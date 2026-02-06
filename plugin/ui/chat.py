@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from typing import Callable, Any, TypeVar, Generic, Type
 from abc import ABC, abstractmethod
+from typing import Any, Callable, TypeVar, cast
 
 import mdpopups
 import sublime
 
-from ..constants import COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX, COPILOT_OUTPUT_PANEL_PREFIX
+from ..constants import COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX
 from ..helpers import GithubInfo, preprocess_message_for_html
 from ..template import load_resource_template
 from ..types import CopilotPayloadConversationEntry, CopilotPayloadConversationEntryTransformed, StLayout
-from ..utils import find_view_by_id, find_window_by_id, get_copilot_setting, remove_prefix, set_copilot_setting
+from ..utils import find_view_by_id, get_copilot_setting, set_copilot_setting
 
-T = TypeVar('T', bound='BaseConversationEntry')
+T = TypeVar("T", bound="BaseConversationEntry")
 
 
 class ConversationSettingsManager:
@@ -32,6 +32,7 @@ class ConversationSettingsManager:
 
     def _create_property(self, key: str, default: Any = None):
         """Create a property descriptor for a setting."""
+
         def getter(self) -> Any:
             return self._get_setting(key, default)
 
@@ -46,7 +47,7 @@ class BaseConversationManager(ConversationSettingsManager, ABC):
 
     def __init__(self, window: sublime.Window, settings_prefix: str):
         super().__init__(window, settings_prefix)
-        self._ui_entry = None
+        self._ui_entry: BaseConversationEntry | None = None
 
     # Shared properties using descriptors
     @property
@@ -128,7 +129,7 @@ class BaseConversationManager(ConversationSettingsManager, ABC):
         pass
 
     @abstractmethod
-    def get_ui_entry(self) -> 'BaseConversationEntry':
+    def get_ui_entry(self) -> BaseConversationEntry:
         """Get the UI entry for this conversation type."""
         pass
 
@@ -173,19 +174,15 @@ class BaseConversationEntry(ABC):
         else:
             self._open_in_group(self.window, active_group + 1)
 
-        self.window.focus_view(self.window.active_view())
+        if view := self.window.active_view():
+            self.window.focus_view(view)
 
     def update(self) -> None:
         """Update the conversation sheet content."""
         if not (sheet := self.window.transient_sheet_in_group(self.manager.group_id)):
             return
 
-        mdpopups.update_html_sheet(
-            sheet=sheet,
-            contents=self.completion_content,
-            md=True,
-            wrapper_class="wrapper"
-        )
+        mdpopups.update_html_sheet(sheet=sheet, contents=self.completion_content, md=True, wrapper_class="wrapper")
 
     def close(self) -> None:
         """Close the conversation sheet."""
@@ -295,11 +292,11 @@ class WindowConversationManager(BaseConversationManager):
         self.code_block_index = {}
         self.reference_block_state = {}
 
-    def get_ui_entry(self) -> '_ConversationEntry':
+    def get_ui_entry(self) -> _ConversationEntry:
         """Get the UI entry for chat conversations."""
         if not self._ui_entry:
             self._ui_entry = _ConversationEntry(self.window, self)
-        return self._ui_entry
+        return cast(_ConversationEntry, self._ui_entry)
 
     # Chat-specific methods
     def append_reference_block_state(self, turn_id: str, state: bool) -> None:
@@ -356,11 +353,11 @@ class WindowEditConversationManager(BaseConversationManager):
         self.source_view_id = -1
         self.pending_edits = []
 
-    def get_ui_entry(self) -> '_EditConversationEntry':
+    def get_ui_entry(self) -> _EditConversationEntry:
         """Get the UI entry for edit conversations."""
         if not self._ui_entry:
             self._ui_entry = _EditConversationEntry(self.window, self)
-        return self._ui_entry
+        return cast(_EditConversationEntry, self._ui_entry)
 
     # Edit-specific methods
     def add_pending_edit(self, edit: dict[str, Any]) -> None:
@@ -383,7 +380,7 @@ class WindowEditConversationManager(BaseConversationManager):
         self.reset()
 
     @staticmethod
-    def find_by_conversation_id(conversation_id: str) -> 'WindowEditConversationManager | None':
+    def find_by_conversation_id(conversation_id: str) -> WindowEditConversationManager | None:
         """Find an edit conversation manager by conversation ID across all windows."""
         for window in sublime.windows():
             wecm = WindowEditConversationManager(window)
@@ -540,6 +537,7 @@ class _EditConversationEntry(BaseConversationEntry):
         if source_view := self.wecm.get_source_view():
             if file_name := source_view.file_name():
                 import os
+
                 source_file = os.path.basename(file_name)
 
         # Process conversation entries into sections
@@ -551,19 +549,14 @@ class _EditConversationEntry(BaseConversationEntry):
                 "turnId": entry.get("turnId", ""),
                 "annotations": entry.get("annotations", []),
                 "thumbs_up_url": sublime.command_url(
-                    "copilot_conversation_rating_shim",
-                    {"turn_id": entry.get("turnId", ""), "rating": 1}
+                    "copilot_conversation_rating_shim", {"turn_id": entry.get("turnId", ""), "rating": 1}
                 ),
                 "thumbs_down_url": sublime.command_url(
-                    "copilot_conversation_rating_shim",
-                    {"turn_id": entry.get("turnId", ""), "rating": -1}
+                    "copilot_conversation_rating_shim", {"turn_id": entry.get("turnId", ""), "rating": -1}
                 ),
                 "turn_delete_url": sublime.command_url(
                     "copilot_edit_conversation_turn_delete",
-                    {
-                        "conversation_id": self.wecm.conversation_id,
-                        "turn_id": entry.get("turnId", "")
-                    }
+                    {"conversation_id": self.wecm.conversation_id, "turn_id": entry.get("turnId", "")},
                 ),
             })
 
@@ -575,17 +568,12 @@ class _EditConversationEntry(BaseConversationEntry):
             sections=sections,
             pending_edits=self.wecm.pending_edits,
             close_url=sublime.command_url(
-                "copilot_edit_conversa~tion_close",
-                {"conversation_id": self.wecm.conversation_id}
+                "copilot_edit_conversa~tion_close", {"conversation_id": self.wecm.conversation_id}
             ),
             destroy_url=sublime.command_url(
-                "copilot_edit_conversation_destroy_shim",
-                {"conversation_id": self.wecm.conversation_id}
+                "copilot_edit_conversation_destroy_shim", {"conversation_id": self.wecm.conversation_id}
             ),
-            apply_edits_url=sublime.command_url(
-                "copilot_apply_edit_conversation_edits",
-                {}
-            ),
+            apply_edits_url=sublime.command_url("copilot_apply_edit_conversation_edits", {}),
         )
 
     def prompt_for_message(self, callback: Callable[[str], None], initial_text: str = "") -> None:

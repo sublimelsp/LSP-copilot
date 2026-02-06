@@ -21,6 +21,7 @@ from wcmatch import glob
 from .constants import COPILOT_WINDOW_SETTINGS_PREFIX, PACKAGE_NAME
 from .log import log_error
 from .settings import get_plugin_setting_dotted
+from .template import load_string_template
 from .types import (
     CopilotConversationTemplates,
     CopilotDocType,
@@ -207,6 +208,7 @@ def prepare_code_review_request_doc(view: sublime.View):
         "version": view.change_count(),
     }
 
+
 def prepare_completion_request_doc(view: sublime.View) -> CopilotDocType | None:
     selection = view.sel()[0]
     file_path = view.file_name() or f"buffer:{view.buffer().id()}"
@@ -298,8 +300,6 @@ def preprocess_chat_message(
     message: str,
     templates: Sequence[CopilotUserDefinedPromptTemplates] | None = None,
 ) -> tuple[bool, str]:
-    from .template import load_string_template
-
     templates = templates or []
     user_template = first_true(templates, pred=lambda t: f"/{t['id']}" == message)
 
@@ -354,14 +354,7 @@ class GitHelper:
     def run_git_command(cmd: list[str], cwd: str | None = None) -> str | None:
         """Run a git command and return the output, or None if it fails."""
         try:
-            result = subprocess.run(
-                cmd,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=True
-            )
+            result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=10, check=True)
             return result.stdout.strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             return None
@@ -376,7 +369,7 @@ class GitHelper:
                 capture_output=True,
                 text=True,
                 timeout=5,
-                check=True
+                check=True,
             )
             return result.stdout.strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
@@ -385,36 +378,36 @@ class GitHelper:
     @staticmethod
     def get_git_changes(repo_root: str) -> list[str]:
         """Get actual diff content for staged and unstaged changes."""
-        changes = []
-        
+        changes: list[str] = []
+
         # Get staged changes (actual diff content)
         staged_output = GitHelper.run_git_command(["git", "diff", "--cached"], repo_root)
         if staged_output:
             changes.append(f"=== STAGED CHANGES ===\n{staged_output}")
-        
+
         # Get unstaged changes (actual diff content)
         unstaged_output = GitHelper.run_git_command(["git", "diff"], repo_root)
         if unstaged_output:
             changes.append(f"=== UNSTAGED CHANGES ===\n{unstaged_output}")
-        
+
         # Get untracked files content (for small files)
         untracked_output = GitHelper.run_git_command(["git", "ls-files", "--others", "--exclude-standard"], repo_root)
         if untracked_output:
-            untracked_files = [f.strip() for f in untracked_output.split('\n') if f.strip()]
-            untracked_content = []
-            
+            untracked_files = [f.strip() for f in untracked_output.split("\n") if f.strip()]
+            untracked_content: list[str] = []
+
             for file_path in untracked_files[:5]:  # Limit to first 5 untracked files
                 full_path = Path(repo_root) / file_path
                 try:
                     if full_path.is_file() and full_path.stat().st_size < 10000:  # Only read files < 10KB
-                        content = full_path.read_text(encoding='utf-8', errors='ignore')
+                        content = full_path.read_text(encoding="utf-8", errors="ignore")
                         untracked_content.append(f"=== NEW FILE: {file_path} ===\n{content}")
                 except (OSError, UnicodeDecodeError):
                     untracked_content.append(f"=== NEW FILE: {file_path} ===\n[Binary or unreadable file]")
-            
+
             if untracked_content:
                 changes.extend(untracked_content)
-        
+
         return changes
 
     @staticmethod
@@ -427,33 +420,22 @@ class GitHelper:
         """Get recent commits by the current user."""
         if not user_email:
             return []
-        
-        cmd = [
-            "git", "log", 
-            f"--author={user_email}",
-            f"--max-count={limit}",
-            "--oneline",
-            "--no-merges"
-        ]
-        
+
+        cmd = ["git", "log", f"--author={user_email}", f"--max-count={limit}", "--oneline", "--no-merges"]
+
         output = GitHelper.run_git_command(cmd, repo_root)
         if output:
-            return [line.strip() for line in output.split('\n') if line.strip()]
+            return [line.strip() for line in output.split("\n") if line.strip()]
         return []
 
     @staticmethod
     def get_recent_commits(repo_root: str, limit: int = 20) -> list[str]:
         """Get recent commits from all contributors."""
-        cmd = [
-            "git", "log",
-            f"--max-count={limit}",
-            "--oneline",
-            "--no-merges"
-        ]
-        
+        cmd = ["git", "log", f"--max-count={limit}", "--oneline", "--no-merges"]
+
         output = GitHelper.run_git_command(cmd, repo_root)
         if output:
-            return [line.strip() for line in output.split('\n') if line.strip()]
+            return [line.strip() for line in output.split("\n") if line.strip()]
         return []
 
     @staticmethod
@@ -461,15 +443,15 @@ class GitHelper:
         """Get the workspace folder path."""
         if not (window := view.window()):
             return None
-        
+
         # Try to get the project path
         if folders := window.folders():
             return folders[0]
-        
+
         # Fallback to file directory
         if file_name := view.file_name():
             return str(Path(file_name).parent)
-        
+
         return None
 
     @staticmethod
@@ -477,16 +459,17 @@ class GitHelper:
         """Get user's language preference from Sublime Text settings."""
         # Try to get language from various Sublime Text settings
         settings = sublime.load_settings("Preferences.sublime-settings")
-        
+
         # Check for explicit language setting
         if lang := settings.get("language"):
             return lang
-        
+
         # Fallback to system locale
         try:
             import locale
+
             return locale.getdefaultlocale()[0]
-        except:
+        except Exception:
             return "en-US"
 
     @classmethod
@@ -520,9 +503,10 @@ class GitHelper:
             "userLanguage": user_language,
         }
 
+
 def prepare_conversation_edit_request(view: sublime.View) -> dict:
     """Prepare document information for edit conversation request."""
-    if not (doc := prepare_completion_request_doc(view)):
+    if not (prepare_completion_request_doc(view)):
         return {}
 
     # Get the current selection
@@ -537,20 +521,17 @@ def prepare_conversation_edit_request(view: sublime.View) -> dict:
     # Convert positions to LSP format (line, character)
     def point_to_lsp_position(point: int) -> dict:
         row, col = view.rowcol(point)
-        return {
-            "line": row,
-            "character": col
-        }
+        return {"line": row, "character": col}
 
     return {
         "text": view.substr(sublime.Region(0, view.size())),
         "languageId": get_view_language_id(view),
         "selection": {
             "start": point_to_lsp_position(selection_start),
-            "end": point_to_lsp_position(selection_end)
+            "end": point_to_lsp_position(selection_end),
         },
         "range": {
             "start": point_to_lsp_position(selection_line_start),
-            "end": point_to_lsp_position(selection_line_end)
-        }
+            "end": point_to_lsp_position(selection_line_end),
+        },
     }

@@ -16,13 +16,13 @@ from __future__ import annotations
 import json
 import os
 import uuid
-import time
 from abc import ABC
 from collections.abc import Callable
 from functools import partial, wraps
 from pathlib import Path
 from typing import Any, Literal, Sequence, cast
 
+import mdpopups
 import sublime
 import sublime_plugin
 from LSP.plugin import Request, Session
@@ -40,41 +40,41 @@ from .constants import (
     REQ_CONVERSATION_DESTROY,
     REQ_CONVERSATION_PRECONDITIONS,
     REQ_CONVERSATION_RATING,
+    REQ_CONVERSATION_REGISTER_TOOLS,
     REQ_CONVERSATION_TEMPLATES,
     REQ_CONVERSATION_TURN,
     REQ_CONVERSATION_TURN_DELETE,
+    REQ_COPILOT_CODE_REVIEW,
     REQ_COPILOT_MODELS,
     REQ_COPILOT_SET_MODEL_POLICY,
+    REQ_EDIT_CONVERSATION_CREATE,
+    REQ_EDIT_CONVERSATION_DESTROY,
+    REQ_EDIT_CONVERSATION_TURN,
+    REQ_EDIT_CONVERSATION_TURN_DELETE,
     REQ_FILE_CHECK_STATUS,
     REQ_GET_PANEL_COMPLETIONS,
     REQ_GET_PROMPT,
     REQ_GET_VERSION,
-    REQ_INLINE_COMPLETION_PROMPT,
+    REQ_GIT_COMMIT_GENERATE,
     REQ_INLINE_COMPLETION,
+    REQ_INLINE_COMPLETION_PROMPT,
     REQ_NOTIFY_ACCEPTED,
     REQ_NOTIFY_REJECTED,
     REQ_SIGN_IN_CONFIRM,
     REQ_SIGN_IN_INITIATE,
     REQ_SIGN_IN_WITH_GITHUB_TOKEN,
     REQ_SIGN_OUT,
-    REQ_COPILOT_CODE_REVIEW,
-    REQ_GIT_COMMIT_GENERATE,
-    REQ_EDIT_CONVERSATION_CREATE,
-    REQ_EDIT_CONVERSATION_TURN,
-    REQ_EDIT_CONVERSATION_TURN_DELETE,
-    REQ_EDIT_CONVERSATION_DESTROY,
-    REQ_CONVERSATION_REGISTER_TOOLS,
 )
 from .decorators import must_be_active_view
 from .helpers import (
+    GitHelper,
     GithubInfo,
-    prepare_completion_request_doc,
     prepare_code_review_request_doc,
+    prepare_completion_request_doc,
+    prepare_conversation_edit_request,
     prepare_conversation_turn_request,
     preprocess_chat_message,
     preprocess_message_for_html,
-    GitHelper,
-    prepare_conversation_edit_request,
 )
 from .log import log_info
 from .types import (
@@ -94,10 +94,13 @@ from .types import (
     CopilotRequestConversationAgent,
     CopilotUserDefinedPromptTemplates,
     T_Callable,
-    CopilotPayloadEditConversationCreate,
-    CopilotPayloadEditConversationTurn,
 )
-from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager, WindowEditConversationManager
+from .ui import (
+    ViewCompletionManager,
+    ViewPanelCompletionManager,
+    WindowConversationManager,
+    WindowEditConversationManager,
+)
 from .utils import (
     find_index_by_key_value,
     find_view_by_id,
@@ -213,14 +216,16 @@ class CopilotInlineCompletionPromptCommand(CopilotTextCommand):
 
     @_provide_plugin_session()
     def run(self, plugin: CopilotPlugin, session: Session, _: sublime.Edit, message: str = "") -> None:
+        if not (window := self.view.window()):
+            return
         # Prompt for message if not provided
         if not message.strip():
-            self.view.window().show_input_panel(
+            window.show_input_panel(
                 "Completion Prompt:",
                 "",
                 lambda msg: self._request_inline_completion_with_prompt(plugin, session, msg),
                 None,
-                None
+                None,
             )
         else:
             self._request_inline_completion_with_prompt(plugin, session, message)
@@ -246,35 +251,26 @@ class CopilotInlineCompletionPromptCommand(CopilotTextCommand):
 
         # Prepare the request payload based on the structure from constants
         payload = {
-            "textDocument": {
-                "uri": doc["uri"]
-            },
-            "position": {
-                "line": row,
-                "character": col
-            },
-            "formattingOptions": {
-                "tabSize": doc.get("tabSize", 4),
-                "insertSpaces": doc.get("insertSpaces", True)
-            },
-            "context": {
-                "triggerKind": 2
-            },
-            "data": {
-                "message": message
-            }
+            "textDocument": {"uri": doc["uri"]},
+            "position": {"line": row, "character": col},
+            "formattingOptions": {"tabSize": doc.get("tabSize", 4), "insertSpaces": doc.get("insertSpaces", True)},
+            "context": {"triggerKind": 2},
+            "data": {"message": message},
         }
 
         # Send the request
         session.send_request(
             Request(REQ_INLINE_COMPLETION_PROMPT, payload),
-            lambda response: self._on_result_inline_completion_prompt(response, message)
+            lambda response: self._on_result_inline_completion_prompt(response, message),
         )
 
         status_message(f"Requesting completion with prompt: {message[:50]}...", icon="⏳")
 
     def _on_result_inline_completion_prompt(self, response: Any, original_message: str) -> None:
         """Handle the response from the inline completion prompt request."""
+        if not (window := self.view.window()):
+            return
+
         if not response:
             status_message("No completion suggestions received", icon="❌")
             return
@@ -287,10 +283,9 @@ class CopilotInlineCompletionPromptCommand(CopilotTextCommand):
                 return
 
             # Show the completion selection dialog
-            self.view.window().run_command("copilot_select_inline_completion", {
-                "items": items,
-                "original_message": original_message
-            })
+            window.run_command(
+                "copilot_select_inline_completion", {"items": items, "original_message": original_message}
+            )
         else:
             # Fallback for other response formats
             status_message(f"Unexpected response format: {type(response)}", icon="❌")
@@ -301,14 +296,13 @@ class CopilotInlineCompletionCommand(CopilotTextCommand):
 
     @_provide_plugin_session()
     def run(self, plugin: CopilotPlugin, session: Session, _: sublime.Edit, message: str = "") -> None:
+        if not (window := self.view.window()):
+            return
+
         # Prompt for message if not provided
         if not message.strip():
-            self.view.window().show_input_panel(
-                "Completion Message:",
-                "",
-                lambda msg: self._request_inline_completion(plugin, session, msg),
-                None,
-                None
+            window.show_input_panel(
+                "Completion Message:", "", lambda msg: self._request_inline_completion(plugin, session, msg), None, None
             )
         else:
             self._request_inline_completion(plugin, session, message)
@@ -334,35 +328,28 @@ class CopilotInlineCompletionCommand(CopilotTextCommand):
 
         # Prepare the request payload - same as prompt but with triggerKind: 1
         payload = {
-            "textDocument": {
-                "uri": doc["uri"]
-            },
-            "position": {
-                "line": row,
-                "character": col
-            },
-            "formattingOptions": {
-                "tabSize": doc.get("tabSize", 4),
-                "insertSpaces": doc.get("insertSpaces", True)
-            },
+            "textDocument": {"uri": doc["uri"]},
+            "position": {"line": row, "character": col},
+            "formattingOptions": {"tabSize": doc.get("tabSize", 4), "insertSpaces": doc.get("insertSpaces", True)},
             "context": {
                 "triggerKind": 1  # Different from prompt command which uses 2
             },
-            "data": {
-                "message": message
-            }
+            "data": {"message": message},
         }
 
         # Send the request
         session.send_request(
             Request(REQ_INLINE_COMPLETION, payload),
-            lambda response: self._on_result_inline_completion(response, message)
+            lambda response: self._on_result_inline_completion(response, message),
         )
 
         status_message(f"Requesting inline completion: {message[:50]}...", icon="⏳")
 
     def _on_result_inline_completion(self, response: Any, original_message: str) -> None:
         """Handle the response from the inline completion request."""
+        if not (window := self.view.window()):
+            return
+
         if not response:
             status_message("No completion suggestions received", icon="❌")
             return
@@ -379,10 +366,9 @@ class CopilotInlineCompletionCommand(CopilotTextCommand):
             self._original_message = original_message
 
             # Show the completion selection dialog
-            self.view.window().run_command("copilot_select_inline_completion", {
-                "items": items,
-                "original_message": original_message
-            })
+            window.run_command(
+                "copilot_select_inline_completion", {"items": items, "original_message": original_message}
+            )
         else:
             # Fallback for other response formats
             status_message(f"Unexpected response format: {type(response)}", icon="❌")
@@ -391,7 +377,14 @@ class CopilotInlineCompletionCommand(CopilotTextCommand):
 class CopilotSelectInlineCompletionCommand(CopilotTextCommand):
     """Command to select and insert an inline completion from a list."""
 
-    def run(self, edit: sublime.Edit, selected: int, items: list[dict[str, Any]], original_message: str, selected_item: dict[str, Any] | None = None) -> None:
+    def run(
+        self,
+        edit: sublime.Edit,
+        selected: int,
+        items: list[dict[str, Any]],
+        original_message: str,
+        selected_item: dict[str, Any] | None = None,
+    ) -> None:
         if selected_item:
             # Insert the selected completion
             insert_text = selected_item.get("insertText", "")
@@ -453,10 +446,8 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
     def placeholder(self) -> str:
         return f"Select completion for: {self.original_message[:50]}..."
 
-    def list_items(self) -> list[sublime.ListInputItem]:
-        import mdpopups
-
-        list_items = []
+    def list_items(self) -> list[sublime.ListInputItem]:  # type: ignore
+        list_items: list[sublime.ListInputItem] = []
         for i, item in enumerate(self.items):
             insert_text = item.get("insertText", "")
 
@@ -475,29 +466,29 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
                     html_details = f"<pre>{insert_text}</pre>"
 
                 # Create a short preview for the main text
-                preview = insert_text.strip().split('\n')[0]
+                preview = insert_text.strip().split("\n")[0]
                 if len(preview) > 60:
                     preview = preview[:57] + "..."
 
                 # Add line count annotation
-                line_count = len(insert_text.split('\n'))
+                line_count = len(insert_text.split("\n"))
                 annotation = f"{line_count} line{'s' if line_count != 1 else ''}"
 
-                list_items.append(sublime.ListInputItem(
-                    text=preview,
-                    value=item,
-                    details=html_details,
-                    annotation=annotation,
-                    kind=sublime.KIND_SNIPPET
-                ))
+                list_items.append(
+                    sublime.ListInputItem(
+                        text=preview, value=item, details=html_details, annotation=annotation, kind=sublime.KIND_SNIPPET
+                    )
+                )
             else:
-                list_items.append(sublime.ListInputItem(
-                    text=f"Completion {i + 1}",
-                    value=item,
-                    details="<em>No preview available</em>",
-                    annotation="",
-                    kind=sublime.KIND_SNIPPET
-                ))
+                list_items.append(
+                    sublime.ListInputItem(
+                        text=f"Completion {i + 1}",
+                        value=item,
+                        details="<em>No preview available</em>",
+                        annotation="",
+                        kind=sublime.KIND_SNIPPET,
+                    )
+                )
 
         return list_items
 
@@ -506,23 +497,23 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
         text_lower = text.lower().strip()
 
         # Python
-        if any(keyword in text_lower for keyword in ['def ', 'import ', 'from ', 'class ', 'if __name__']):
+        if any(keyword in text_lower for keyword in ["def ", "import ", "from ", "class ", "if __name__"]):
             return "python"
 
         # JavaScript/TypeScript
-        if any(keyword in text_lower for keyword in ['function ', 'const ', 'let ', 'var ', '=>', 'console.log']):
+        if any(keyword in text_lower for keyword in ["function ", "const ", "let ", "var ", "=>", "console.log"]):
             return "javascript"
 
         # HTML
-        if text_lower.startswith('<') and '>' in text_lower:
+        if text_lower.startswith("<") and ">" in text_lower:
             return "html"
 
         # CSS
-        if '{' in text and '}' in text and ':' in text:
+        if "{" in text and "}" in text and ":" in text:
             return "css"
 
         # JSON
-        if text.strip().startswith('{') and text.strip().endswith('}'):
+        if text.strip().startswith("{") and text.strip().endswith("}"):
             return "json"
 
         # Default to text
@@ -955,14 +946,10 @@ class CopilotConversationAgentsCommand(CopilotTextCommand):
     def _on_agent_selected(self, index: int, agents: list[CopilotRequestConversationAgent]) -> None:
         if index == -1:
             return
-        
+
         # For now, just show detailed info about the selected agent
         agent = agents[index]
-        message_dialog(
-            f"Agent: {agent['name']}\n"
-            f"Slug: {agent['slug']}\n"
-            f"Description: {agent['description']}"
-        )
+        message_dialog(f"Agent: {agent['name']}\nSlug: {agent['slug']}\nDescription: {agent['description']}")
 
 
 class CopilotRegisterConversationToolsCommand(CopilotTextCommand):
@@ -979,17 +966,11 @@ class CopilotRegisterConversationToolsCommand(CopilotTextCommand):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query"
-                        },
-                        "maxResults": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return"
-                        }
+                        "query": {"type": "string", "description": "The search query"},
+                        "maxResults": {"type": "integer", "description": "Maximum number of results to return"},
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "id": "sublime-text-search",
@@ -998,30 +979,16 @@ class CopilotRegisterConversationToolsCommand(CopilotTextCommand):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The text to search for"
-                        },
-                        "filePattern": {
-                            "type": "string",
-                            "description": "Optional file pattern to limit search"
-                        }
+                        "query": {"type": "string", "description": "The text to search for"},
+                        "filePattern": {"type": "string", "description": "Optional file pattern to limit search"},
                     },
-                    "required": ["query"]
-                }
-            }
+                    "required": ["query"],
+                },
+            },
         ]
 
         # Send request to register tools
-        session.send_request(
-            Request(
-                REQ_CONVERSATION_REGISTER_TOOLS,
-                {
-                    "tools": tools
-                }
-            ),
-            self._on_result_register_tools
-        )
+        session.send_request(Request(REQ_CONVERSATION_REGISTER_TOOLS, {"tools": tools}), self._on_result_register_tools)
 
         status_message("Registering conversation tools...", icon="⏳")
 
@@ -1082,9 +1049,9 @@ class CopilotCodeReviewCommand(CopilotTextCommand):
                     "document": doc,
                     "selection": doc["selection"],
                     "source": "command_palette",
-                }
+                },
             ),
-            lambda response: self._on_result_code_review(response, window)
+            lambda response: self._on_result_code_review(response, window),
         )
 
         status_message("Analyzing code...", icon="⏳")
@@ -1121,13 +1088,17 @@ class CopilotCodeReviewCommand(CopilotTextCommand):
                     char_end = file_range.get("end", {}).get("character", 0)
 
                     if line_start == line_end:
-                        panel.run_command("append", {"characters": f"**Location:** Line {line_start}, characters {char_start}-{char_end}\n\n"})
+                        panel.run_command(
+                            "append",
+                            {"characters": f"**Location:** Line {line_start}, characters {char_start}-{char_end}\n\n"},
+                        )
                     else:
                         panel.run_command("append", {"characters": f"**Location:** Lines {line_start}-{line_end}\n\n"})
 
                 # Add file information if different from current file
                 if uri := comment.get("uri"):
                     import urllib.parse
+
                     file_path = urllib.parse.unquote(uri.replace("file://", ""))
                     file_name = file_path.split("/")[-1] if "/" in file_path else file_path
                     panel.run_command("append", {"characters": f"**File:** {file_name}\n\n"})
@@ -1159,7 +1130,7 @@ class CopilotGitCommitGenerateCommand(CopilotTextCommand):
         # Send request to generate commit message
         session.send_request(
             Request(REQ_GIT_COMMIT_GENERATE, git_data),
-            lambda response: self._on_result_git_commit_generate(response, window)
+            lambda response: self._on_result_git_commit_generate(response, window),
         )
 
     def _on_result_git_commit_generate(self, payload: dict, window: sublime.Window) -> None:
@@ -1531,6 +1502,7 @@ class CopilotSendAnyRequestPayloadInputHandler(sublime_plugin.TextInputHandler):
     def name(self) -> str:
         return "payload"
 
+
 # THIS IS NOT IMPLEMENTED
 # {
 #     partialResultToken: I.Union([I.String(), I.Number()]),
@@ -1549,6 +1521,7 @@ class CopilotSendAnyRequestPayloadInputHandler(sublime_plugin.TextInputHandler):
 #     model: I.Optional(I.String()),
 # })
 
+
 class CopilotEditConversationCreateCommand(CopilotTextCommand):
     """Command to create a new edit conversation with GitHub Copilot."""
 
@@ -1566,7 +1539,9 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
         if wecm.conversation_id:
             ui_entry = wecm.get_ui_entry()
             ui_entry.open()
-            ui_entry.prompt_for_message(callback=lambda msg: self._on_edit_prompt(plugin, session, msg), initial_text=message)
+            ui_entry.prompt_for_message(
+                callback=lambda msg: self._on_edit_prompt(plugin, session, msg), initial_text=message
+            )
             return
 
         # If no message provided, prompt for it first
@@ -1576,8 +1551,7 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
             ui_entry = wecm.get_ui_entry()
             ui_entry.open()
             ui_entry.prompt_for_message(
-                callback=lambda msg: self._create_edit_conversation_with_message(plugin, session, msg),
-                initial_text=""
+                callback=lambda msg: self._create_edit_conversation_with_message(plugin, session, msg), initial_text=""
             )
             return
 
@@ -1630,37 +1604,22 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
                 REQ_EDIT_CONVERSATION_CREATE,
                 {
                     "partialResultToken": f"copilot_pedit://{window.id()}",
-                    "turns": [
-                        {
-                            "request": msg,
-                            "doc": doc
-                        }
-                    ],
+                    "turns": [{"request": msg, "doc": doc}],
                     "workingSet": [
-                        {
-                            "type": "file",
-                            "uri": file_uri,
-                            "selection": doc["selection"],
-                            "range": doc["range"]
-                        }
+                        {"type": "file", "uri": file_uri, "selection": doc["selection"], "range": doc["range"]}
                     ],
                     "source": "panel",
                     "workspaceFolder": "",
                     "userLanguage": "en-US",  # Default to English
-                    "model": None  # Let the server choose the model
-                }
+                    "model": None,  # Let the server choose the model
+                },
             ),
-            lambda response: self._on_result_edit_conversation_create(plugin, session, response)
+            lambda response: self._on_result_edit_conversation_create(plugin, session, response),
         )
 
         status_message("Creating edit conversation...", icon="⏳")
 
-    def _on_result_edit_conversation_create(
-        self,
-        plugin: CopilotPlugin,
-        session: Session,
-        response: list
-    ) -> None:
+    def _on_result_edit_conversation_create(self, plugin: CopilotPlugin, session: Session, response: list) -> None:
         if not (window := self.view.window()):
             return
         if len(response) != 0:
@@ -1674,7 +1633,6 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
         ui_entry = wecm.get_ui_entry()
         ui_entry.open()
         ui_entry.prompt_for_message(callback=lambda msg: self._on_edit_prompt(plugin, session, msg))
-
 
     def _on_edit_prompt(self, plugin: CopilotPlugin, session: Session, msg: str):
         if not (window := self.view.window()):
@@ -1692,9 +1650,8 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
 
         is_template, msg = preprocess_chat_message(source_view, msg, [])
         # Get workspace folder if available
-        workspace_folder = None
         if window.folders():
-            workspace_folder = window.folders()[0]
+            window.folders()[0]
 
         # Prepare the document for the request
         doc = prepare_conversation_edit_request(source_view)
@@ -1728,19 +1685,14 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
                     "editConversationId": wecm.conversation_id,
                     "message": msg,
                     "workingSet": [
-                        {
-                            "type": "file",
-                            "uri": file_uri,
-                            "selection": doc["selection"],
-                            "range": doc["range"]
-                        }
+                        {"type": "file", "uri": file_uri, "selection": doc["selection"], "range": doc["range"]}
                     ],
                     "workspaceFolder": "",
                     "userLanguage": "en-US",
-                    "model": None
-                }
+                    "model": None,
+                },
             ),
-            lambda _: ui_entry.prompt_for_message(callback=lambda x: self._on_edit_prompt(plugin, session, x))
+            lambda _: ui_entry.prompt_for_message(callback=lambda x: self._on_edit_prompt(plugin, session, x)),
         )
         ui_entry.show_waiting_state(True)
 
@@ -1768,22 +1720,16 @@ class CopilotApplyEditConversationEditsCommand(CopilotTextCommand):
 
         # Apply edits to the source view
         window.focus_view(source_view)
-        with mutable_view(source_view) as edit_obj:
+        with mutable_view(source_view) as view:
             for edit_item in pending_edits:
                 if range_data := edit_item.get("range"):
                     # Convert LSP range to Sublime Text region
-                    start_point = source_view.text_point(
-                        range_data["start"]["line"],
-                        range_data["start"]["character"]
-                    )
-                    end_point = source_view.text_point(
-                        range_data["end"]["line"],
-                        range_data["end"]["character"]
-                    )
+                    start_point = source_view.text_point(range_data["start"]["line"], range_data["start"]["character"])
+                    end_point = source_view.text_point(range_data["end"]["line"], range_data["end"]["character"])
                     region = sublime.Region(start_point, end_point)
 
                     # Replace the text in the region
-                    edit_obj.replace(region, edit_item.get("newText", ""))
+                    view.replace(edit, region, edit_item.get("newText", ""))
 
         # Clear pending edits
         wecm.clear_pending_edits()
@@ -1794,32 +1740,14 @@ class CopilotEditConversationTurnDeleteCommand(CopilotTextCommand):
     """Command to delete a turn from an edit conversation."""
 
     @_provide_plugin_session()
-    def run(
-        self,
-        plugin: CopilotPlugin,
-        session: Session,
-        _: sublime.Edit,
-        conversation_id: str,
-        turn_id: str
-    ) -> None:
+    def run(self, plugin: CopilotPlugin, session: Session, _: sublime.Edit, conversation_id: str, turn_id: str) -> None:
         session.send_request(
-            Request(
-                REQ_EDIT_CONVERSATION_TURN_DELETE,
-                {
-                    "conversationId": conversation_id,
-                    "turnId": turn_id
-                }
-            ),
-            lambda response: self._on_result_edit_conversation_turn_delete(conversation_id, turn_id, response)
+            Request(REQ_EDIT_CONVERSATION_TURN_DELETE, {"conversationId": conversation_id, "turnId": turn_id}),
+            lambda response: self._on_result_edit_conversation_turn_delete(conversation_id, turn_id, response),
         )
 
-    def _on_result_edit_conversation_turn_delete(
-        self,
-        conversation_id: str,
-        turn_id: str,
-        payload: Any
-    ) -> None:
-        status_message(f"Deleted turn from edit conversation", icon="✅")
+    def _on_result_edit_conversation_turn_delete(self, conversation_id: str, turn_id: str, payload: Any) -> None:
+        status_message("Deleted turn from edit conversation", icon="✅")
 
         # Update the panel if it exists
         if not (window := self.view.window()):
@@ -1827,9 +1755,10 @@ class CopilotEditConversationTurnDeleteCommand(CopilotTextCommand):
 
         panel_name = f"{COPILOT_OUTPUT_PANEL_PREFIX}_edit_{conversation_id[:8]}"
         for view in window.views():
-            if view.settings().get('output.name') == panel_name:
+            if view.settings().get("output.name") == panel_name:
                 view.run_command("copilot_refresh_edit_conversation_panel", {"conversation_id": conversation_id})
                 break
+
 
 class CopilotEditConversationDestroyShimCommand(CopilotWindowCommand):
     def run(self, conversation_id: str) -> None:
@@ -1841,17 +1770,12 @@ class CopilotEditConversationDestroyShimCommand(CopilotWindowCommand):
         self.window.focus_view(view)
         view.run_command("copilot_edit_conversation_destroy", {"conversation_id": conversation_id})
 
+
 class CopilotEditConversationDestroyCommand(CopilotTextCommand):
     """Command to destroy an edit conversation."""
 
     @_provide_plugin_session()
-    def run(
-        self,
-        plugin: CopilotPlugin,
-        session: Session,
-        _: sublime.Edit,
-        conversation_id: str
-    ) -> None:
+    def run(self, plugin: CopilotPlugin, session: Session, _: sublime.Edit, conversation_id: str) -> None:
         if not (
             (window := self.view.window())
             and (wecm := WindowEditConversationManager(window))
@@ -1866,7 +1790,7 @@ class CopilotEditConversationDestroyCommand(CopilotTextCommand):
                 {
                     "editConversationId": conversation_id,
                     "options": {},
-                }
+                },
             ),
             self._on_result_edit_conversation_destroy,
         )
