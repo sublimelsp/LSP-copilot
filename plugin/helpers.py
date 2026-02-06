@@ -21,7 +21,6 @@ from wcmatch import glob
 from .constants import COPILOT_WINDOW_SETTINGS_PREFIX, PACKAGE_NAME
 from .log import log_error
 from .settings import get_plugin_setting_dotted
-from .template import load_string_template
 from .types import (
     CopilotConversationTemplates,
     CopilotDocType,
@@ -300,6 +299,8 @@ def preprocess_chat_message(
     message: str,
     templates: Sequence[CopilotUserDefinedPromptTemplates] | None = None,
 ) -> tuple[bool, str]:
+    from .template import load_string_template
+
     templates = templates or []
     user_template = first_true(templates, pred=lambda t: f"/{t['id']}" == message)
 
