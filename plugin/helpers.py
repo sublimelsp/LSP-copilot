@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 import os
 import re
+import shlex
 import subprocess
 import threading
 import time
@@ -11,7 +12,6 @@ from pathlib import Path
 from typing import Any, Callable, Literal, Sequence, cast
 
 import requests
-import shlex
 import sublime
 from LSP.plugin.core.protocol import Position as LspPosition
 from LSP.plugin.core.protocol import Range as LspRange
@@ -528,19 +528,15 @@ def prepare_conversation_edit_request(view: sublime.View) -> dict:
     selection_line_end = view.line(selection_end).end()
 
     # Convert positions to LSP format (line, character)
-    def point_to_lsp_position(point: int) -> dict:
-        row, col = view.rowcol(point)
-        return {"line": row, "character": col}
-
     return {
         "text": view.substr(sublime.Region(0, view.size())),
         "languageId": get_view_language_id(view),
         "selection": {
-            "start": point_to_lsp_position(selection_start),
-            "end": point_to_lsp_position(selection_end),
+            "start": st_point_to_lsp_position(selection_start, view),
+            "end": st_point_to_lsp_position(selection_end, view),
         },
         "range": {
-            "start": point_to_lsp_position(selection_line_start),
-            "end": point_to_lsp_position(selection_line_end),
+            "start": st_point_to_lsp_position(selection_line_start, view),
+            "end": st_point_to_lsp_position(selection_line_end, view),
         },
     }

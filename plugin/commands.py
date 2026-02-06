@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.parse
 import uuid
 from abc import ABC
 from collections.abc import Callable
@@ -26,6 +27,7 @@ import mdpopups
 import sublime
 import sublime_plugin
 from LSP.plugin import Request, Session
+from LSP.plugin.core.protocol import ResponseError
 from LSP.plugin.core.registry import LspTextCommand, LspWindowCommand
 from LSP.plugin.core.url import filename_to_uri
 from lsp_utils.helpers import rmtree_ex
@@ -1097,8 +1099,6 @@ class CopilotCodeReviewCommand(CopilotTextCommand):
 
                 # Add file information if different from current file
                 if uri := comment.get("uri"):
-                    import urllib.parse
-
                     file_path = urllib.parse.unquote(uri.replace("file://", ""))
                     file_name = file_path.split("/")[-1] if "/" in file_path else file_path
                     panel.run_command("append", {"characters": f"**File:** {file_name}\n\n"})
@@ -1157,9 +1157,16 @@ class CopilotGitCommitGenerateCommand(CopilotTextCommand):
 class CopilotSetModelPolicyCommand(CopilotTextCommand):
     @_provide_plugin_session()
     def run(self, plugin: CopilotPlugin, session: Session, _: sublime.Edit, model: str, status: str) -> None:
+        def _successed(payload: str) -> None:
+            status_message(f'Model "{model}" has been {status}.', icon="✅")
+
+        def _failed(payload: ResponseError) -> None:
+            status_message(f'Failed to set model policy for "{model}". Error: {payload["message"]}', icon="❌")
+
         session.send_request(
             Request(REQ_COPILOT_SET_MODEL_POLICY, {"model": model, "status": status}),
-            lambda _: None,
+            _successed,
+            _failed,
         )
 
 
@@ -1536,6 +1543,7 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
             return
 
         wecm = WindowEditConversationManager(window)
+
         if wecm.conversation_id:
             ui_entry = wecm.get_ui_entry()
             ui_entry.open()
@@ -1546,7 +1554,6 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
 
         # If no message provided, prompt for it first
         if not message.strip():
-            wecm = WindowEditConversationManager(window)
             wecm.source_view_id = self.view.id()
             ui_entry = wecm.get_ui_entry()
             ui_entry.open()
