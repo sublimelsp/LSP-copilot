@@ -363,7 +363,8 @@ class CopilotPlugin(AbstractPlugin):
                 if suggest_title := params.get("suggestedTitle", None):
                     wcm.suggested_title = suggest_title
 
-                if params.get("reply", None):
+                if edit_agent_rounds := params.get("editAgentRounds", []):
+                    params.setdefault("reply", edit_agent_rounds[-1].get("reply", ""))
                     wcm.append_conversation_entry(params)
 
                 if followup := params.get("followUp", None):
