@@ -1,37 +1,48 @@
 import sublime
 import weakref
+from ..protocol import CompletionItem, CompletionItemDefaults, CompletionList, EditRangeWithInsertReplace as EditRangeWithInsertReplace, InsertReplaceEdit, MarkedString as MarkedString, MarkupContent as MarkupContent, Range as Range, TextEdit
 from .core.constants import COMPLETION_KINDS as COMPLETION_KINDS
 from .core.edit import apply_text_edits as apply_text_edits
 from .core.logging import debug as debug
 from .core.promise import Promise as Promise
-from .core.protocol import CompletionItem as CompletionItem, CompletionItemDefaults as CompletionItemDefaults, CompletionItemKind as CompletionItemKind, CompletionItemTag as CompletionItemTag, CompletionList as CompletionList, CompletionParams as CompletionParams, EditRangeWithInsertReplace as EditRangeWithInsertReplace, Error as Error, InsertReplaceEdit as InsertReplaceEdit, InsertTextFormat as InsertTextFormat, MarkedString as MarkedString, MarkupContent as MarkupContent, MarkupKind as MarkupKind, Range as Range, Request as Request, TextEdit as TextEdit
+from .core.protocol import Error as Error, Request as Request
 from .core.registry import LspTextCommand as LspTextCommand
 from .core.sessions import Session as Session
 from .core.settings import userprefs as userprefs
-from .core.views import FORMAT_MARKUP_CONTENT as FORMAT_MARKUP_CONTENT, FORMAT_STRING as FORMAT_STRING, MarkdownLangMap as MarkdownLangMap, minihtml as minihtml, range_to_region as range_to_region, show_lsp_popup as show_lsp_popup, text_document_position_params as text_document_position_params, update_lsp_popup as update_lsp_popup
+from .core.views import FORMAT_MARKUP_CONTENT as FORMAT_MARKUP_CONTENT, FORMAT_STRING as FORMAT_STRING, MarkdownLangMap as MarkdownLangMap, minihtml as minihtml, range_to_region as range_to_region, show_lsp_popup as show_lsp_popup, text_document_position_params as text_document_position_params
 from _typeshed import Incomplete
 from typing import Any, Callable, Generator
 from typing_extensions import TypeAlias, TypeGuard
 
-SessionName: TypeAlias
-CompletionResponse: TypeAlias
+SessionName: TypeAlias = str
+CompletionResponse: TypeAlias = list[CompletionItem] | CompletionList | None | Error
 ResolvedCompletions: TypeAlias
-CompletionsStore: TypeAlias
+CompletionsStore: TypeAlias = tuple[list[CompletionItem], CompletionItemDefaults]
 
 def format_details(detail: str, cutoff_length: int = 80) -> str: ...
 def format_completion(item: CompletionItem, index: int, can_resolve_completion_items: bool, session_name: str, item_defaults: CompletionItemDefaults, view_id: int) -> sublime.CompletionItem: ...
 def get_text_edit_range(text_edit: TextEdit | InsertReplaceEdit) -> Range: ...
 def is_range(val: Any) -> TypeGuard[Range]: ...
 def is_edit_range(val: Any) -> TypeGuard[EditRangeWithInsertReplace]: ...
-def completion_with_defaults(item: CompletionItem, item_defaults: CompletionItemDefaults) -> CompletionItem: ...
+def completion_with_defaults(item: CompletionItem, item_defaults: CompletionItemDefaults) -> CompletionItem:
+    ''' Currently supports defaults for: ["editRange", "insertTextFormat", "data"] '''
 
 class QueryCompletionsTask:
+    '''
+    Represents pending completion requests.
+
+    Can be canceled while in progress in which case the "on_done_async" callback will get immediately called with empty
+    list and the pending response from the server(s) will be canceled and results ignored.
+
+    All public methods must only be called on the async thread and the "on_done_async" callback will also be called
+    on the async thread.
+    '''
     _view: Incomplete
     _location: Incomplete
     _triggered_manually: Incomplete
     _on_done_async: Incomplete
     _resolved: bool
-    _pending_completion_requests: Incomplete
+    _pending_completion_requests: dict[int, weakref.ref[Session]]
     def __init__(self, view: sublime.View, location: int, triggered_manually: bool, on_done_async: Callable[[list[sublime.CompletionItem], sublime.AutoCompleteFlags], None]) -> None: ...
     def query_completions_async(self, sessions: list[Session]) -> None: ...
     def _create_completion_request_async(self, session: Session) -> Promise[ResolvedCompletions]: ...
@@ -46,7 +57,8 @@ class LspResolveDocsCommand(LspTextCommand):
     def run(self, edit: sublime.Edit, index: int, session_name: str, event: dict | None = None) -> None: ...
     def _handle_resolve_response_async(self, language_map: MarkdownLangMap | None, item: CompletionItem) -> None: ...
     def _format_documentation(self, content: MarkedString | MarkupContent, language_map: MarkdownLangMap | None) -> str: ...
-    def _on_navigate(self, url: str) -> None: ...
+    def _on_documentation_close(self) -> None: ...
+    def _on_navigate(self, href: str) -> None: ...
 
 class LspCommitCompletionWithOppositeInsertMode(LspTextCommand):
     active: bool

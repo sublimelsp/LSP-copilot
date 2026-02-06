@@ -1,6 +1,7 @@
 import sublime
+from ..protocol import Location as Location
 from .core.constants import RegionKey as RegionKey
-from .core.protocol import Location as Location, Point as Point, Request as Request
+from .core.protocol import Point as Point, Request as Request
 from .core.registry import LspTextCommand as LspTextCommand, get_position as get_position, windows as windows
 from .core.sessions import Session as Session
 from .core.settings import userprefs as userprefs
@@ -23,4 +24,5 @@ class LspSymbolReferencesCommand(LspTextCommand):
     def _show_references_in_output_panel(self, word: str, session: Session, locations: list[Location]) -> None: ...
 
 def _get_relative_path(base_dir: str | None, file_path: str) -> str: ...
-def _group_locations_by_uri(window: sublime.Window, config: ClientConfig, locations: list[Location]) -> dict[str, list[tuple[Point, str]]]: ...
+def _group_locations_by_uri(window: sublime.Window, config: ClientConfig, locations: list[Location]) -> dict[str, list[tuple[Point, str]]]:
+    """Return a dictionary that groups locations by the URI it belongs."""

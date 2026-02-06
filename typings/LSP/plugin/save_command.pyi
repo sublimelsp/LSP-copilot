@@ -7,6 +7,11 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Callable
 
 class SaveTask(metaclass=ABCMeta):
+    """
+    Base class for tasks that run on save.
+
+    Note: The whole task runs on the async thread.
+    """
     @classmethod
     @abstractmethod
     def is_applicable(cls, view: sublime.View) -> bool: ...
@@ -28,7 +33,7 @@ class SaveTasksRunner:
     _text_command: Incomplete
     _tasks: Incomplete
     _on_tasks_completed: Incomplete
-    _pending_tasks: Incomplete
+    _pending_tasks: list[SaveTask]
     _canceled: bool
     def __init__(self, text_command: LspTextCommand, tasks: list[type[SaveTask]], on_complete: Callable[[], None]) -> None: ...
     def run(self) -> None: ...
@@ -38,10 +43,14 @@ class SaveTasksRunner:
     def _on_task_completed_async(self) -> None: ...
 
 class LspSaveCommand(LspTextCommand):
+    """
+    A command used as a substitute for native save command. Runs code actions and document
+    formatting before triggering the native save command.
+    """
     _tasks: list[type[SaveTask]]
     @classmethod
     def register_task(cls, task: type[SaveTask]) -> None: ...
-    _save_tasks_runner: Incomplete
+    _save_tasks_runner: SaveTasksRunner | None
     def __init__(self, view: sublime.View) -> None: ...
     def run(self, edit: sublime.Edit, **kwargs: dict[str, Any]) -> None: ...
     def _trigger_on_pre_save_async(self) -> None: ...

@@ -1,9 +1,10 @@
 import sublime
 import sublime_plugin
+from ..protocol import DocumentSymbol, DocumentSymbolParams as DocumentSymbolParams, Location, Range, SymbolInformation, SymbolKind, WorkspaceSymbol
 from .core.constants import SYMBOL_KINDS as SYMBOL_KINDS
 from .core.input_handlers import DynamicListInputHandler as DynamicListInputHandler, PreselectedListInputHandler as PreselectedListInputHandler
 from .core.promise import Promise as Promise
-from .core.protocol import DocumentSymbol as DocumentSymbol, DocumentSymbolParams as DocumentSymbolParams, Location as Location, Point as Point, Range as Range, Request as Request, SymbolInformation as SymbolInformation, SymbolKind as SymbolKind, SymbolTag as SymbolTag, WorkspaceSymbol as WorkspaceSymbol
+from .core.protocol import Error as Error, Point as Point, Request as Request, ResponseError as ResponseError
 from .core.registry import LspTextCommand as LspTextCommand, LspWindowCommand as LspWindowCommand
 from .core.sessions import print_to_status_bar as print_to_status_bar
 from .core.views import offset_to_point as offset_to_point, range_to_region as range_to_region, text_document_identifier as text_document_identifier
@@ -30,6 +31,12 @@ def is_document_symbol_value(val: Any) -> TypeGuard[DocumentSymbolValue]: ...
 def symbol_to_list_input_item(item: DocumentSymbol | WorkspaceSymbol | SymbolInformation, hierarchy: str = '', session_name: str | None = None) -> sublime.ListInputItem: ...
 
 class LspSelectionClearCommand(sublime_plugin.TextCommand):
+    """
+    Selections may not be modified outside the run method of a text command. Thus, to allow modification in an async
+    context we need to have dedicated commands for this.
+
+    https://github.com/sublimehq/sublime_text/issues/485#issuecomment-337480388
+    """
     def run(self, _: sublime.Edit) -> None: ...
 
 class LspSelectionAddCommand(sublime_plugin.TextCommand):
@@ -40,7 +47,7 @@ class LspSelectionSetCommand(sublime_plugin.TextCommand):
 
 class LspDocumentSymbolsCommand(LspTextCommand):
     capability: str
-    items: Incomplete
+    items: list[sublime.ListInputItem]
     kind: int
     cached: bool
     has_matching_symbols: bool
@@ -48,7 +55,7 @@ class LspDocumentSymbolsCommand(LspTextCommand):
     def run(self, edit: sublime.Edit, event: dict[str, Any] | None = None, kind: int = 0, index: int | None = None) -> None: ...
     def input(self, args: dict) -> sublime_plugin.CommandInputHandler | None: ...
     def handle_response_async(self, response: list[DocumentSymbol] | list[SymbolInformation] | None) -> None: ...
-    def handle_response_error(self, error: Any) -> None: ...
+    def handle_response_error(self, error: ResponseError) -> None: ...
     def _reset_suppress_input(self) -> None: ...
     def process_document_symbol_recursive(self, item: DocumentSymbol, hierarchy: str = '') -> list[sublime.ListInputItem]: ...
 
@@ -87,5 +94,5 @@ class WorkspaceSymbolsInputHandler(DynamicListInputHandler):
     def preview(self, text: WorkspaceSymbolValue | None) -> str | sublime.Html | None: ...
     command: Incomplete
     def on_modified(self, text: str) -> None: ...
-    def _handle_response_async(self, session_name: str, response: list[SymbolInformation] | list[WorkspaceSymbol] | None) -> list[sublime.ListInputItem]: ...
+    def _handle_response_async(self, session_name: str, response: list[SymbolInformation] | list[WorkspaceSymbol] | Error | None) -> list[sublime.ListInputItem]: ...
     def _on_all_responses(self, change_count: int, item_lists: list[list[sublime.ListInputItem]]) -> None: ...

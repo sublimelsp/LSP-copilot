@@ -1,5 +1,6 @@
 import sublime
-from .protocol import MessageType as MessageType, Response as Response, ShowMessageRequestParams as ShowMessageRequestParams
+from ...protocol import MessageType, ShowMessageRequestParams as ShowMessageRequestParams
+from .protocol import Response as Response
 from .sessions import Session as Session
 from .views import show_lsp_popup as show_lsp_popup, text2html as text2html
 from _typeshed import Incomplete

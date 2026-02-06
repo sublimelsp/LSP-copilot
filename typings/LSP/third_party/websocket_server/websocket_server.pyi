@@ -27,6 +27,26 @@ class API:
     def send_message_to_all(self, msg) -> None: ...
 
 class WebsocketServer(ThreadingMixIn, TCPServer, API):
+    """
+    A websocket server waiting for clients to connect.
+
+    Args:
+        port(int): Port to bind to
+        host(str): Hostname or IP to listen for connections. By default 127.0.0.1
+            is being used. To accept connections from any client, you should use
+            0.0.0.0.
+        loglevel: Logging level from logging module to use for logging. By default
+            warnings and errors are being logged.
+
+    Properties:
+        clients(list): A list of connected clients. A client is a dictionary
+            like below.
+                {
+                 'id'      : id,
+                 'handler' : handler,
+                 'address' : (addr, port)
+                }
+    """
     allow_reuse_address: bool
     daemon_threads: bool
     clients: Incomplete
@@ -54,7 +74,11 @@ class WebSocketHandler(StreamRequestHandler):
     def read_next_message(self) -> None: ...
     def send_message(self, message) -> None: ...
     def send_pong(self, message) -> None: ...
-    def send_text(self, message, opcode=...): ...
+    def send_text(self, message, opcode=...):
+        """
+        Important: Fragmented(=continuation) messages are not supported since
+        their usage cases are limited - when we don't know the payload length.
+        """
     def read_http_headers(self): ...
     def handshake(self) -> None: ...
     @classmethod

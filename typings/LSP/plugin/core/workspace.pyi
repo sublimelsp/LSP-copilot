@@ -1,5 +1,5 @@
 import sublime
-from .protocol import WorkspaceFolder as LspWorkspaceFolder
+from ...protocol import WorkspaceFolder as LspWorkspaceFolder
 from .types import diff as diff, matches_pattern as matches_pattern, sublime_pattern_to_glob as sublime_pattern_to_glob
 from .url import filename_to_uri as filename_to_uri
 from _typeshed import Incomplete
@@ -24,13 +24,15 @@ class WorkspaceFolder:
 
 class ProjectFolders:
     _window: Incomplete
-    folders: Incomplete
-    _folders_exclude_patterns: Incomplete
+    folders: list[str]
+    _folders_exclude_patterns: list[list[str]]
     def __init__(self, window: sublime.Window) -> None: ...
     def _update_exclude_patterns(self, folders: list[str]) -> None: ...
     def update(self) -> bool: ...
     def includes_path(self, file_path: str) -> bool: ...
-    def includes_excluded_path(self, file_path: str) -> bool: ...
+    def includes_excluded_path(self, file_path: str) -> bool:
+        """Path is excluded if it's within one or more workspace folders and in at least one of the folders it's not
+        excluded using `folder_exclude_patterns`."""
     def contains(self, view_or_file_name: str | sublime.View) -> bool: ...
     def get_workspace_folders(self) -> list[WorkspaceFolder]: ...
 

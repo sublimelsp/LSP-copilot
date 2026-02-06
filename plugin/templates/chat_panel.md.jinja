@@ -35,6 +35,15 @@
 </div>
 
 
+{% if section.warnings %}
+<div class="warnings">
+{% for warning in section.warnings %}
+  <p>⚠️ {{ warning }}</p>
+{% endfor %}
+</div>
+{% endif %}
+
+
 {%- if section.kind == "report" and section.references -%}
 <div class="reference">
 {%- if section.references_expanded -%}

@@ -1,9 +1,40 @@
 import sublime
+from ..protocol import Diagnostic as Diagnostic, DiagnosticOptions as DiagnosticOptions, DiagnosticRegistrationOptions as DiagnosticRegistrationOptions, DiagnosticSeverity, DocumentUri as DocumentUri
 from .core.constants import DIAGNOSTIC_KINDS as DIAGNOSTIC_KINDS, REGIONS_INITIALIZE_FLAGS as REGIONS_INITIALIZE_FLAGS
-from .core.protocol import Diagnostic as Diagnostic, DiagnosticSeverity as DiagnosticSeverity
+from .core.protocol import Point as Point
+from .core.sessions import Session as Session
 from .core.settings import userprefs as userprefs
+from .core.types import DocumentSelector_ as DocumentSelector_
+from .core.url import normalize_uri as normalize_uri
 from .core.views import diagnostic_severity as diagnostic_severity, format_diagnostics_for_annotation as format_diagnostics_for_annotation
 from _typeshed import Incomplete
+from functools import lru_cache
+
+DiagnosticsIdentifier = str | None
+DOCUMENT_DIAGNOSTICS_RETRIGGER_DELAY: int
+WORKSPACE_DIAGNOSTICS_RETRIGGER_DELAY: int
+
+@lru_cache
+def get_diagnostics_identifiers(session: Session, view: sublime.View) -> set[DiagnosticsIdentifier]: ...
+
+class DiagnosticsStorage:
+    """ Per session storage for diagnostics from pull diangostics streams and from publishDiagnostics notifications. """
+    _providers: dict[str | None, DiagnosticOptions | DiagnosticRegistrationOptions]
+    _identifiers: set[DiagnosticsIdentifier]
+    _workspace_diagnostics_identifiers: set[DiagnosticsIdentifier]
+    _diagnostics: dict[DocumentUri, dict[DiagnosticsIdentifier, list[Diagnostic]]]
+    def __init__(self) -> None: ...
+    def get_identifiers(self, view: sublime.View) -> set[DiagnosticsIdentifier]: ...
+    @property
+    def workspace_diagnostics_identifiers(self) -> set[DiagnosticsIdentifier]: ...
+    def _update_identifiers(self) -> None: ...
+    def register_provider(self, registration_id: str | None, options: DiagnosticOptions | DiagnosticRegistrationOptions) -> None: ...
+    def unregister_provider(self, registration_id: str) -> None: ...
+    def set_diagnostics(self, uri: DocumentUri, identifier: DiagnosticsIdentifier, diagnostics: list[Diagnostic]) -> None: ...
+    def _sorted_diagnostics_for_uri(self, uri: DocumentUri, max_severity: int) -> list[Diagnostic]: ...
+    def get_diagnostics(self, max_severity: int = ...) -> dict[DocumentUri, list[Diagnostic]]: ...
+    def get_diagnostics_for_uri(self, uri: DocumentUri, max_severity: int = ...) -> list[Diagnostic]: ...
+    def total_errors_and_warnings(self) -> tuple[int, int]: ...
 
 class DiagnosticsAnnotationsView:
     _view: Incomplete

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import functools
+import io
 import json
 import os
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
+from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
 import uuid
 
-import jmespath
 import sublime
-from LSP.plugin import ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
-from lsp_utils import ApiWrapperInterface, NpmClientHandler, notification_handler, request_handler
+from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
+from lsp_utils import notification_handler, request_handler
 from LSP.plugin.core.protocol import Point, Range
 from LSP.plugin.core.sessions import SessionViewProtocol
 from LSP.plugin.core.url import filename_to_uri
@@ -54,7 +55,7 @@ from .helpers import (
     preprocess_completions,
     preprocess_panel_completions,
 )
-from .log import log_warning, log_info, log_debug
+from .log import log_debug, log_error, log_info, log_warning
 from .template import load_string_template
 from .types import (
     AccountStatus,
@@ -62,7 +63,6 @@ from .types import (
     CopilotPayloadConversationContext,
     CopilotPayloadConversationEntry,
     CopilotPayloadFeatureFlagsNotification,
-    CopilotPayloadGetVersion,
     CopilotPayloadLogMessage,
     CopilotPayloadPanelSolution,
     CopilotPayloadSignInConfirm,
@@ -75,10 +75,15 @@ from .utils import (
     all_views,
     all_windows,
     debounce,
+    decompress_buffer,
+    find_view_by_id,
     get_session_setting,
+    rmtree_ex,
+    simple_urlopen,
     status_message,
     find_window_by_id,
 )
+from .version_manager import version_manager
 
 WindowId = int
 
@@ -115,23 +120,7 @@ def _guard_view(*, failed_return: Any = None) -> Callable[[T_Callable], T_Callab
     return decorator
 
 
-class CopilotPlugin(NpmClientHandler):
-    package_name = PACKAGE_NAME
-    server_directory = "language-server"
-    server_binary_path = os.path.join(
-        server_directory,
-        "node_modules",
-        "@github",
-        "copilot-language-server",
-        "dist",
-        "language-server.js",
-    )
-
-    server_version = ""
-    """The version of the "@github/copilot-language-server" package."""
-    server_version_gh = ""
-    """The version of the Github Copilot language server."""
-
+class CopilotPlugin(AbstractPlugin):
     window_attrs: weakref.WeakKeyDictionary[sublime.Window, WindowAttr] = weakref.WeakKeyDictionary()
     """Per-window attributes. I.e., per-session attributes."""
 
@@ -141,6 +130,9 @@ class CopilotPlugin(NpmClientHandler):
     )
 
     _activity_indicator: ActivityIndicator | None = None
+    _server_status_message: str = ""
+    _server_status_kind: str = ""
+    _feature_flags: CopilotPayloadFeatureFlagsNotification | None = None
 
     def __init__(self, session: weakref.ref[Session]) -> None:
         super().__init__(session)
@@ -149,6 +141,9 @@ class CopilotPlugin(NpmClientHandler):
             self.window_attrs[sess.window].client = self
 
         self._activity_indicator = ActivityIndicator(self.update_status_bar_text)
+        self._server_status_message = ""
+        self._server_status_kind = ""
+        self._feature_flags = None
 
         # Note that ST persists view settings after ST is closed. If the user closes ST
         # during awaiting Copilot's response, the internal state management will be corrupted.
@@ -161,15 +156,47 @@ class CopilotPlugin(NpmClientHandler):
             WindowConversationManager(window).reset()
 
     @classmethod
-    def setup(cls) -> None:
-        super().setup()
-
-        cls.server_version = cls.parse_server_version()
+    def name(cls) -> str:
+        return PACKAGE_NAME
 
     @classmethod
     def cleanup(cls) -> None:
         cls.window_attrs.clear()
-        super().cleanup()
+
+    @classmethod
+    def configuration(cls) -> tuple[sublime.Settings, str]:
+        basename = f"{cls.name()}.sublime-settings"
+        filepath = f"Packages/{cls.name()}/{basename}"
+        return sublime.load_settings(basename), filepath
+
+    @classmethod
+    def additional_variables(cls) -> dict[str, str] | None:
+        return {
+            "server_path": str(cls.server_path()),
+        }
+
+    @classmethod
+    def needs_update_or_installation(cls) -> bool:
+        return not cls.server_path().is_file()
+
+    @classmethod
+    def install_or_update(cls) -> None:
+        log_info(f"Downloading server tarball: {version_manager.server_download_url}")
+        try:
+            data = simple_urlopen(version_manager.server_download_url)
+        except Exception as e:
+            log_warning(f"Failed to download server: {e}")
+            return
+
+        rmtree_ex(cls.plugin_storage_dir(), ignore_errors=True)
+
+        decompress_buffer(
+            io.BytesIO(data),
+            filename=version_manager.THIS_TARBALL_NAME,
+            dst_dir=cls.versioned_server_dir(),
+        )
+        # make the server binary executable (required on Mac/Linux)
+        os.chmod(cls.server_path(), 0o755)
 
     @classmethod
     def can_start(
@@ -193,48 +220,6 @@ class CopilotPlugin(NpmClientHandler):
         workspace_folders: list[WorkspaceFolder],
         configuration: ClientConfig,
     ) -> str | None:
-        super().on_pre_start(window, initiating_view, workspace_folders, configuration)
-        configuration.init_options.update(cls.editor_info())
-        return None
-
-    def on_ready(self, api: ApiWrapperInterface) -> None:
-        def _on_get_version(response: CopilotPayloadGetVersion, failed: bool) -> None:
-            self.server_version_gh = response.get("version", "")
-
-        def _on_check_status(result: CopilotPayloadSignInConfirm, failed: bool) -> None:
-            user = result.get("user")
-            self.set_account_status(
-                signed_in=result["status"] in {"NotAuthorized", "OK"},
-                authorized=result["status"] == "OK",
-                user=user,
-            )
-            
-        def _on_register_providers(response: Any, failed: bool) -> None:
-            if failed:
-                log_warning("Failed to register context providers")
-            else:
-                log_info("Successfully registered context providers")
-
-        api.send_request(REQ_GET_VERSION, {}, _on_get_version)
-        api.send_request(REQ_CHECK_STATUS, {}, _on_check_status)
-        
-        # Register context providers
-        api.send_request(
-            REQ_CONTEXT_REGISTER_PROVIDERS,
-            {
-                "providers": [
-                    {
-                        "id": "sublime-text-editor",
-                        "name": "Sublime Text Editor",
-                        "fullName": "Sublime Text Editor Context Provider",
-                        "description": "Provides access to the Sublime Text editor context"
-                    }
-                ]
-            },
-            _on_register_providers
-        )
-
-    def on_settings_changed(self, settings: DottedDict) -> None:
         def parse_proxy(proxy: str) -> NetworkProxy | None:
             # in the form of "username:password@host:port" or "host:port"
             if not proxy:
@@ -248,47 +233,48 @@ class CopilotPlugin(NpmClientHandler):
                 "rejectUnauthorized": True,
             }
 
-        super().on_settings_changed(settings)
-
-        if not (session := self.weaksession()):
-            return
-
-        editor_info = self.editor_info()
-
-        if networkProxy := parse_proxy(settings.get("proxy") or ""):
-            editor_info["networkProxy"] = networkProxy
-
-        session.send_request(Request(REQ_SET_EDITOR_INFO, editor_info), lambda response: None)
-        self.update_status_bar_text()
-
-    @staticmethod
-    def version() -> str:
-        """Return this plugin's version. If it's not installed by Package Control, return `"unknown"`."""
-        try:
-            return json.loads(sublime.load_resource(f"Packages/{PACKAGE_NAME}/package-metadata.json"))["version"]
-        except Exception:
-            return "unknown"
-
-    @classmethod
-    def editor_info(cls) -> dict[str, Any]:
-        return {
+        editor_info: dict[str, Any] = {
             "editorInfo": {
-                "name": "vscode",
+                "name": "Sublime Text",
                 "version": sublime.version(),
             },
             "editorPluginInfo": {
                 "name": PACKAGE_NAME,
-                "version": cls.version(),
+                "version": cls.get_version(),
             },
         }
+        if network_proxy := parse_proxy(configuration.settings.get("proxy") or ""):
+            editor_info["networkProxy"] = network_proxy
 
-    @classmethod
-    def required_node_version(cls) -> str:
-        """
-        Testing playground at https://semver.npmjs.com
-        And `0.0.0` means "no restrictions".
-        """
-        return ">=18"
+        configuration.init_options.update(editor_info)
+        return None
+
+    def on_settings_changed(self, settings: DottedDict) -> None:
+        super().on_settings_changed(settings)
+
+        self.update_status_bar_text()
+
+        if not (session := self.weaksession()):
+            return
+
+        def _on_check_status(result: CopilotPayloadSignInConfirm) -> None:
+            user = result.get("user")
+            self.set_account_status(
+                signed_in=result["status"] in {"NotAuthorized", "OK"},
+                authorized=result["status"] == "OK",
+                user=user,
+            )
+
+        local_checks = get_session_setting(session, "local_checks")
+        session.send_request(Request(REQ_CHECK_STATUS, {"localChecksOnly": local_checks}), _on_check_status)
+
+    @staticmethod
+    def get_version() -> str:
+        """Returns this plugin's version. If it's not installed by Package Control, returns an empty string."""
+        try:
+            return json.loads(sublime.load_resource(f"Packages/{PACKAGE_NAME}/package-metadata.json"))["version"]
+        except Exception:
+            return ""
 
     @classmethod
     def get_account_status(cls) -> AccountStatus:
@@ -333,17 +319,6 @@ class CopilotPlugin(NpmClientHandler):
         return None
 
     @classmethod
-    def parse_server_version(cls) -> str:
-        lock_file_content = sublime.load_resource(f"Packages/{PACKAGE_NAME}/language-server/package-lock.json")
-        return (
-            jmespath.search(
-                'dependencies."@github/copilot-language-server".version',
-                json.loads(lock_file_content),
-            )
-            or ""
-        )
-
-    @classmethod
     def plugin_session(cls, view: sublime.View) -> tuple[None, None] | tuple[CopilotPlugin, Session | None]:
         plugin = cls.from_view(view)
         return (plugin, plugin.weaksession()) if plugin else (None, None)
@@ -358,13 +333,30 @@ class CopilotPlugin(NpmClientHandler):
         session = self.weaksession()
         return bool(session and session.session_view_for_view_async(view))
 
+    @classmethod
+    def plugin_storage_dir(cls) -> Path:
+        """The storage directory for this plugin."""
+        return Path(cls.storage_path()) / PACKAGE_NAME
+
+    @classmethod
+    def versioned_server_dir(cls) -> Path:
+        """The directory specific to the current server version."""
+        return cls.plugin_storage_dir() / f"v{version_manager.server_version}"
+
+    @classmethod
+    def server_path(cls) -> Path:
+        """The path of the language server binary."""
+        return cls.versioned_server_dir() / version_manager.THIS_TARBALL_BIN_PATH
+
     def update_status_bar_text(self, extra_variables: dict[str, Any] | None = None) -> None:
         if not (session := self.weaksession()):
             return
 
         variables: dict[str, Any] = {
-            "server_version": self.server_version,
-            "server_version_gh": self.server_version_gh,
+            "client_version": self.get_version(),
+            "server_version": version_manager.server_version,
+            "server_status_message": self._server_status_message,
+            "server_status_kind": self._server_status_kind,
         }
 
         if extra_variables:
@@ -539,11 +531,19 @@ class CopilotPlugin(NpmClientHandler):
 
     @notification_handler(NTFY_FEATURE_FLAGS_NOTIFICATION)
     def _handle_feature_flags_notification(self, payload: CopilotPayloadFeatureFlagsNotification) -> None:
-        pass
+        self._feature_flags = payload
 
     @notification_handler(NTFY_LOG_MESSAGE)
     def _handle_log_message_notification(self, payload: CopilotPayloadLogMessage) -> None:
-        pass
+        level = payload.get("level", 3)
+        msg = payload.get("message", "")
+        log_func = log_info
+        if level <= 1:
+            log_func = log_error
+        elif level == 2:
+            log_func = log_warning
+
+        log_func(f"[Server Log] {msg}")
 
     @notification_handler(NTFY_PANEL_SOLUTION)
     def _handle_panel_solution_notification(self, payload: CopilotPayloadPanelSolution) -> None:
@@ -567,7 +567,9 @@ class CopilotPlugin(NpmClientHandler):
 
     @notification_handler(NTFY_STATUS_NOTIFICATION)
     def _handle_status_notification_notification(self, payload: CopilotPayloadStatusNotification) -> None:
-        pass
+        self._server_status_message = payload.get("message", "")
+        self._server_status_kind = payload.get("status", "")
+        self.update_status_bar_text()
 
     @request_handler(REQ_CONVERSATION_CONTEXT)
     def _handle_conversation_context_request(
@@ -575,7 +577,21 @@ class CopilotPlugin(NpmClientHandler):
         payload: CopilotPayloadConversationContext,
         respond: Callable[[Any], None],
     ) -> None:
-        respond(None)  # what?
+        if not (session := self.weaksession()):
+            return
+
+        skill_id = payload.get("skillId")
+        if (
+            (skill_id == "current-editor")
+            and (window := session.window)
+            and (wcm := WindowConversationManager(window))
+            and (view := find_view_by_id(wcm.last_active_view_id))
+            and (doc := prepare_completion_request_doc(view))
+        ):
+            respond(doc)
+            return
+
+        respond(None)
 
     @_guard_view()
     @debounce()
