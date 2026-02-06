@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal, Sequence, cast
 
 import requests
+import shlex
 import sublime
 from LSP.plugin.core.protocol import Position as LspPosition
 from LSP.plugin.core.protocol import Range as LspRange
@@ -42,6 +43,12 @@ from .utils import (
     get_view_language_id,
     set_copilot_setting,
 )
+
+if os.name == "nt":
+    STARTUPINFO_DEFAULT = subprocess.STARTUPINFO()  # type: ignore
+    STARTUPINFO_DEFAULT.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore
+else:
+    STARTUPINFO_DEFAULT = None  # type: ignore
 
 
 class ActivityIndicator:
@@ -352,29 +359,30 @@ class GitHelper:
     """Helper class for Git operations used by Copilot commands."""
 
     @staticmethod
-    def run_git_command(cmd: list[str], cwd: str | None = None) -> str | None:
+    def run_git_command(cmd: Sequence[str], cwd: str | None = None) -> str | None:
         """Run a git command and return the output, or None if it fails."""
+        result = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            startupinfo=STARTUPINFO_DEFAULT,
+        )
         try:
-            result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=10, check=True)
-            return result.stdout.strip()
+            stdout, stderr = result.communicate(timeout=10)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             return None
+        if result.returncode != 0:
+            log_error(f"Git command failed: {shlex.join(cmd)}; Error: {stderr.strip()}")
+            return None
+        return stdout.strip()
 
     @staticmethod
     def get_git_repo_root(start_path: str) -> str | None:
         """Find the Git repository root starting from the given path."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--show-toplevel"],
-                cwd=start_path,
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=True,
-            )
-            return result.stdout.strip()
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-            return None
+        return GitHelper.run_git_command(["git", "rev-parse", "--show-toplevel"], start_path)
 
     @staticmethod
     def get_git_changes(repo_root: str) -> list[str]:

@@ -1149,7 +1149,7 @@ class CopilotGitCommitGenerateCommand(CopilotTextCommand):
             v.run_command("append", {"characters": commit_message})
 
         # Set commit message syntax
-        view.assign_syntax("Packages/Git/Git Commit.sublime-syntax")
+        view.assign_syntax("Packages/Git Formats/Git Commit Message.sublime-syntax")
 
         status_message("Commit message generated", icon="✅")
 
