@@ -249,11 +249,11 @@ class CopilotPlugin(AbstractPlugin):
 
     @staticmethod
     def get_version() -> str:
-        """Return this plugin's version. If it's not installed by Package Control, return `"unknown"`."""
+        """Returns this plugin's version. If it's not installed by Package Control, returns an empty string."""
         try:
             return json.loads(sublime.load_resource(f"Packages/{PACKAGE_NAME}/package-metadata.json"))["version"]
         except Exception:
-            return "unknown"
+            return ""
 
     @classmethod
     def get_account_status(cls) -> AccountStatus:
