@@ -568,7 +568,7 @@ class _EditConversationEntry(BaseConversationEntry):
             sections=sections,
             pending_edits=self.wecm.pending_edits,
             close_url=sublime.command_url(
-                "copilot_edit_conversa~tion_close", {"conversation_id": self.wecm.conversation_id}
+                "copilot_edit_conversation_close", {"conversation_id": self.wecm.conversation_id}
             ),
             destroy_url=sublime.command_url(
                 "copilot_edit_conversation_destroy_shim", {"conversation_id": self.wecm.conversation_id}
