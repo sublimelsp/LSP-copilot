@@ -1,7 +1,6 @@
 {
 	"command": [
-		"${node_bin}",
-		"${server_path}",
+		"$server_path",
 		"--stdio"
 	],
 	"schemes": [
@@ -36,7 +35,7 @@
 		],
 		// The (Jinja2) template of the status bar text which is inside the parentheses `(...)`.
 		// See https://jinja.palletsprojects.com/templates/
-		"status_text": "{% if is_copilot_ignored %}{{ is_copilot_ignored }}{% elif is_waiting %}{{ is_waiting }}{% elif server_version %}v{{ server_version }}{% endif %}",
+		"status_text": "{% if is_copilot_ignored %}{{ is_copilot_ignored }}{% elif is_waiting %}{{ is_waiting }}{% elif server_status_kind == 'InProgress' %}{{ server_status_message }}{% elif server_version %}v{{ server_version }}{% endif %}",
 		"telemetry": {
 			"telemetryLevel": null
 		},

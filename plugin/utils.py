@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import contextlib
+import gzip
 import os
+import re
+import shutil
 import sys
+import tarfile
 import threading
+import urllib.request
+import zipfile
 from collections.abc import Callable, Generator, Iterable
 from functools import wraps
-from typing import Any, Mapping, Sequence, TypeVar, Union, cast
+from pathlib import Path
+from typing import IO, Any, Mapping, Sequence, TypeVar, Union, cast
 
 import sublime
 from LSP.plugin.core.sessions import Session
@@ -20,6 +27,8 @@ _T = TypeVar("_T")
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
 _T_Number = TypeVar("_T_Number", bound=Union[int, float])
+
+PathLike = Union[Path, str]
 
 
 def all_windows() -> Generator[sublime.Window, None, None]:
@@ -234,3 +243,67 @@ def find_index_by_key_value(items: Sequence[Mapping[_KT, _VT]], key: _KT, value:
     If not found, returns `-1`.
     """
     return first((idx for idx, item in enumerate(items) if key in item and item[key] == value), -1)
+
+
+def rmtree_ex(path: str | Path, ignore_errors: bool = False, **kwargs: Any) -> None:
+    """
+    Same with `shutil.rmtree` but with a workaround for long path on Windows.
+
+    @see https://stackoverflow.com/a/14076169/4643765
+    @see https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
+    """
+    if os.name == "nt" and (path := Path(path)).is_absolute():
+        path = Rf"\\?\{path}"
+    shutil.rmtree(path, ignore_errors, **kwargs)
+
+
+def simple_urlopen(url: str, *, chunk_size: int = 512 * 1024) -> bytes:
+    with urllib.request.urlopen(url) as resp:
+        data = b""
+        while chunk := resp.read(chunk_size):
+            data += chunk
+        if resp.info().get("Content-Encoding") == "gzip":
+            data = gzip.decompress(data)
+    return data
+
+
+def decompress_buffer(buffer: IO[bytes], *, filename: str, dst_dir: PathLike) -> bool:
+    """
+    Decompress the tarball in the bytes IO object.
+
+    :param      buffer:    The buffer bytes IO object
+    :param      filename:  The filename used to determine the decompression method
+    :param      dst_dir:   The destination dir
+
+    :returns:   Successfully decompressed the tarball or not
+    """
+
+    def tar_safe_extract(
+        tar: tarfile.TarFile,
+        path: PathLike = ".",
+        members: Iterable[tarfile.TarInfo] | None = None,
+        *,
+        numeric_owner: bool = False,
+    ) -> None:
+        path = Path(path).resolve()
+        for member in tar.getmembers():
+            member_path = (path / member.name).resolve()
+            if path not in member_path.parents:
+                raise Exception("Attempted Path Traversal in Tar File")
+
+        tar.extractall(path, members, numeric_owner=numeric_owner)
+
+    dst_dir = Path(dst_dir)
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    if re.search(r"\.tar(?:\.(bz2|gz|xz))?$", filename):
+        with tarfile.open(fileobj=buffer, mode="r:*") as tar_f:
+            tar_safe_extract(tar_f, dst_dir)
+        return True
+
+    if filename.endswith(".zip"):
+        with zipfile.ZipFile(buffer) as zip_f:
+            zip_f.extractall(dst_dir)
+        return True
+
+    return False

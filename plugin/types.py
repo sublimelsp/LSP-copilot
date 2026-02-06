@@ -211,6 +211,7 @@ class CopilotPayloadConversationEntryTransformed(TypedDict, total=True):
     codeBlocks: list[str]
     codeBlockIndices: list[int]
     references: list[CopilotRequestConversationTurnReference | CopilotGitHubWebSearch]
+    warnings: list[Any]
 
 
 class CopilotPayloadConversationTemplate(TypedDict, total=True):
