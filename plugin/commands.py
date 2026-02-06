@@ -1688,7 +1688,7 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
             Request(
                 REQ_EDIT_CONVERSATION_TURN,
                 {
-                    "partialResultToken": f"copilot_edit://{window.id()}_{wecm.conversation_id}",
+                    "partialResultToken": f"copilot_pedit://{window.id()}_{wecm.conversation_id}",
                     "editConversationId": wecm.conversation_id,
                     "message": msg,
                     "workingSet": [
