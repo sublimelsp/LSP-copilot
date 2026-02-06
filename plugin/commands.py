@@ -1699,9 +1699,15 @@ class CopilotEditConversationCreateCommand(CopilotTextCommand):
                     "model": None,
                 },
             ),
-            lambda _: ui_entry.prompt_for_message(callback=lambda x: self._on_edit_prompt(plugin, session, x)),
+            lambda _: self._on_edit_turn_done(wecm, plugin, session),
         )
         ui_entry.show_waiting_state(True)
+
+    def _on_edit_turn_done(self, wecm: WindowEditConversationManager, plugin: CopilotPlugin, session: Session) -> None:
+        """Handle the completion of an edit conversation turn."""
+        wecm.is_waiting = False
+        wecm.update()
+        wecm.get_ui_entry().prompt_for_message(callback=lambda x: self._on_edit_prompt(plugin, session, x))
 
 
 class CopilotApplyEditConversationEditsCommand(CopilotTextCommand):
