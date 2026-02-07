@@ -2,7 +2,7 @@
 
 ![Copilot](https://raw.githubusercontent.com/TheSecEng/LSP-copilot/master/docs/screenshot.png)
 
-GitHub Copilot support for Sublime Text LSP plugin provided through [Copilot.vim][].
+GitHub Copilot support for Sublime Text LSP plugin provided through [@github/copilot-language-server][].
 
 This plugin uses [Copilot][] distribution which uses OpenAI Codex to suggest codes
 and entire functions in real-time right from your editor.
@@ -110,7 +110,7 @@ In LSP-copilot's plugin settings, add the following `env` key:
  }
  ```
 
+[@github/copilot-language-server]: https://www.npmjs.com/package/@github/copilot-language-server
 [Copilot]: https://github.com/features/copilot
-[Copilot.vim]: https://github.com/github/copilot.vim
-[LSP]: https://packagecontrol.io/packages/LSP
 [LSP-copilot]: https://packagecontrol.io/packages/LSP-copilot
+[LSP]: https://packagecontrol.io/packages/LSP

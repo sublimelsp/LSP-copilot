@@ -4,6 +4,22 @@
         "command": "copilot_conversation_chat"
     },
     {
+        "caption": "CopilotSelectInlineCompletionCommand",
+        "command": "copilot_select_inline_completion"
+    },
+    {
+        "caption": "Copilot: Code Review",
+        "command": "copilot_code_review"
+    },
+    {
+        "caption": "Copilot: Generate Commit Message",
+        "command": "copilot_git_commit_generate"
+    },
+    {
+        "caption": "Copilot: Edit Conversation",
+        "command": "copilot_edit_conversation_create"
+    },
+    {
         "caption": "Copilot: Explain",
         "command": "copilot_conversation_chat",
         "args": {
@@ -27,6 +43,10 @@
     {
         "caption": "Copilot: Get Prompt",
         "command": "copilot_get_prompt",
+    },
+    {
+        "caption": "Copilot: Models",
+        "command": "copilot_models",
     },
     {
         "caption": "Copilot: Fix This",
@@ -69,6 +89,11 @@
         // Debug Command
         "caption": "Copilot: Conversation Templates",
         "command": "copilot_conversation_templates",
+    },
+    {
+        // Debug Command
+        "caption": "Copilot: Register Conversation Tools",
+        "command": "copilot_register_conversation_tools",
     },
     {
         "caption": "Copilot: Check Status",
