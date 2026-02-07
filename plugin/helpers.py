@@ -14,8 +14,8 @@ from typing import Any, Callable, Literal, Sequence, cast
 import requests
 import sublime
 from LSP.plugin.core.protocol import Position as LspPosition
-from LSP.plugin.core.protocol import Range as LspRange
-from LSP.plugin.core.url import filename_to_uri
+from LSP.plugin.core.url import view_to_uri
+from LSP.plugin.core.views import position_to_offset, range_to_region, region_to_range
 from more_itertools import duplicates_everseen, first_true
 from wcmatch import glob
 
@@ -185,24 +185,6 @@ def st_point_to_lsp_position(point: int, view: sublime.View) -> LspPosition:
     return {"line": row, "character": col}
 
 
-def lsp_position_to_st_point(position: LspPosition, view: sublime.View) -> int:
-    return view.text_point_utf16(position["line"], position["character"])
-
-
-def st_region_to_lsp_range(region: sublime.Region, view: sublime.View) -> LspRange:
-    return {
-        "start": st_point_to_lsp_position(region.begin(), view),
-        "end": st_point_to_lsp_position(region.end(), view),
-    }
-
-
-def lsp_range_to_st_region(range_: LspRange, view: sublime.View) -> sublime.Region:
-    return sublime.Region(
-        lsp_position_to_st_point(range_["start"], view),
-        lsp_position_to_st_point(range_["end"], view),
-    )
-
-
 def prepare_code_review_request_doc(view: sublime.View):
     selection = view.sel()[0]
     file_path = view.file_name() or f"buffer:{view.buffer().id()}"
@@ -224,7 +206,7 @@ def prepare_completion_request_doc(view: sublime.View) -> CopilotDocType | None:
         "indentSize": 1,  # there is no such concept in ST
         "insertSpaces": cast(bool, view.settings().get("translate_tabs_to_spaces")),
         "path": file_path,
-        "uri": file_path if file_path.startswith("buffer:") else filename_to_uri(file_path),
+        "uri": view_to_uri(view),
         "relativePath": get_project_relative_path(file_path),
         "languageId": get_view_language_id(view),
         "position": st_point_to_lsp_position(selection.begin(), view),
@@ -252,15 +234,14 @@ def prepare_conversation_turn_request(
         if not (selection := view_.sel()[0]) or view_.substr(selection).isspace():
             continue
 
-        file_path = view_.file_name()
         references.append({
             "type": "file",
             "status": "included",  # included, blocked, notfound, empty
-            "uri": filename_to_uri(file_path) if file_path else f"buffer:{view_.buffer().id()}",
+            "uri": view_to_uri(view),
             "position": st_point_to_lsp_position(selection.begin(), view_),
-            "range": st_region_to_lsp_range(selection, view_),
-            "visibleRange": st_region_to_lsp_range(view_.visible_region(), view_),
-            "selection": st_region_to_lsp_range(selection, view_),
+            "range": region_to_range(view_, selection),
+            "visibleRange": region_to_range(view_, view_.visible_region()),
+            "selection": region_to_range(view_, selection),
             "openedAt": None,
             "activeAt": None,
         })
@@ -341,14 +322,14 @@ def preprocess_completions(view: sublime.View, completions: list[CopilotPayloadC
 
     # inject extra information for convenience
     for completion in completions:
-        completion["point"] = lsp_position_to_st_point(completion["position"], view)
-        completion["region"] = lsp_range_to_st_region(completion["range"], view).to_tuple()
+        completion["point"] = position_to_offset(completion["position"], view)
+        completion["region"] = range_to_region(completion["range"], view).to_tuple()
 
 
 def preprocess_panel_completions(view: sublime.View, completions: Sequence[CopilotPayloadPanelSolution]) -> None:
     """Preprocess the `completions` from "getCompletionsCycling" request."""
     for completion in completions:
-        completion["region"] = lsp_range_to_st_region(completion["range"], view).to_tuple()
+        completion["region"] = range_to_region(completion["range"], view).to_tuple()
 
 
 def is_debug_mode() -> bool:
