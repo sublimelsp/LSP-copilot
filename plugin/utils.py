@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import gzip
+import io
 import os
 import re
 import shutil
@@ -259,9 +260,9 @@ def rmtree_ex(path: str | Path, ignore_errors: bool = False, **kwargs: Any) -> N
 
 def simple_urlopen(url: str, *, chunk_size: int = 512 * 1024) -> bytes:
     with urllib.request.urlopen(url) as resp:
-        data = b""
-        while chunk := resp.read(chunk_size):
-            data += chunk
+        buffer = io.BytesIO()
+        shutil.copyfileobj(resp, buffer, length=chunk_size)
+        data = buffer.getvalue()
         if resp.info().get("Content-Encoding") == "gzip":
             data = gzip.decompress(data)
     return data
