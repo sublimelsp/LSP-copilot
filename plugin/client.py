@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 import functools
-import io
 import json
-import os
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
 
 import sublime
 from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
 from lsp_utils import notification_handler, request_handler
+from typing_extensions import override
 
 from .constants import (
     NTFY_FEATURE_FLAGS_NOTIFICATION,
@@ -55,11 +53,8 @@ from .utils import (
     all_views,
     all_windows,
     debounce,
-    decompress_buffer,
     find_view_by_id,
     get_session_setting,
-    rmtree_ex,
-    simple_urlopen,
     status_message,
 )
 from .version_manager import version_manager
@@ -134,49 +129,43 @@ class CopilotPlugin(AbstractPlugin):
         for window in all_windows():
             WindowConversationManager(window).reset()
 
+    @override
     @classmethod
     def name(cls) -> str:
         return PACKAGE_NAME
 
-    @classmethod
-    def cleanup(cls) -> None:
-        cls.window_attrs.clear()
-
+    @override
     @classmethod
     def configuration(cls) -> tuple[sublime.Settings, str]:
         basename = f"{cls.name()}.sublime-settings"
         filepath = f"Packages/{cls.name()}/{basename}"
         return sublime.load_settings(basename), filepath
 
+    @override
     @classmethod
     def additional_variables(cls) -> dict[str, str] | None:
         return {
-            "server_path": str(cls.server_path()),
+            "server_path": str(version_manager.server_path),
         }
 
+    @override
     @classmethod
     def needs_update_or_installation(cls) -> bool:
-        return not cls.server_path().is_file()
+        return not version_manager.is_installed
 
+    @override
     @classmethod
     def install_or_update(cls) -> None:
-        log_info(f"Downloading server tarball: {version_manager.server_download_url}")
-        try:
-            data = simple_urlopen(version_manager.server_download_url)
-        except Exception as e:
-            log_warning(f"Failed to download server: {e}")
-            return
+        version_manager.install_server()
 
-        rmtree_ex(cls.plugin_storage_dir(), ignore_errors=True)
+    @override
+    @classmethod
+    def should_ignore(cls, view: sublime.View) -> bool:
+        if not (window := view.window()):
+            return False
+        return CopilotIgnore(window).trigger(view)
 
-        decompress_buffer(
-            io.BytesIO(data),
-            filename=version_manager.THIS_TARBALL_NAME,
-            dst_dir=cls.versioned_server_dir(),
-        )
-        # make the server binary executable (required on Mac/Linux)
-        os.chmod(cls.server_path(), 0o755)
-
+    @override
     @classmethod
     def can_start(
         cls,
@@ -191,6 +180,7 @@ class CopilotPlugin(AbstractPlugin):
         cls.window_attrs.setdefault(window, WindowAttr())
         return None
 
+    @override
     @classmethod
     def on_pre_start(
         cls,
@@ -228,6 +218,7 @@ class CopilotPlugin(AbstractPlugin):
         configuration.init_options.update(editor_info)
         return None
 
+    @override
     def on_settings_changed(self, settings: DottedDict) -> None:
         super().on_settings_changed(settings)
 
@@ -246,6 +237,10 @@ class CopilotPlugin(AbstractPlugin):
 
         local_checks = get_session_setting(session, "local_checks")
         session.send_request(Request(REQ_CHECK_STATUS, {"localChecksOnly": local_checks}), _on_check_status)
+
+    @classmethod
+    def cleanup(cls) -> None:
+        cls.window_attrs.clear()
 
     @staticmethod
     def get_version() -> str:
@@ -302,30 +297,9 @@ class CopilotPlugin(AbstractPlugin):
         plugin = cls.from_view(view)
         return (plugin, plugin.weaksession()) if plugin else (None, None)
 
-    @classmethod
-    def should_ignore(cls, view: sublime.View) -> bool:
-        if not (window := view.window()):
-            return False
-        return CopilotIgnore(window).trigger(view)
-
     def is_valid_for_view(self, view: sublime.View) -> bool:
         session = self.weaksession()
         return bool(session and session.session_view_for_view_async(view))
-
-    @classmethod
-    def plugin_storage_dir(cls) -> Path:
-        """The storage directory for this plugin."""
-        return Path(cls.storage_path()) / PACKAGE_NAME
-
-    @classmethod
-    def versioned_server_dir(cls) -> Path:
-        """The directory specific to the current server version."""
-        return cls.plugin_storage_dir() / f"v{version_manager.server_version}"
-
-    @classmethod
-    def server_path(cls) -> Path:
-        """The path of the language server binary."""
-        return cls.versioned_server_dir() / version_manager.THIS_TARBALL_BIN_PATH
 
     def update_status_bar_text(self, extra_variables: dict[str, Any] | None = None) -> None:
         if not (session := self.weaksession()):
