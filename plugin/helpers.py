@@ -187,12 +187,11 @@ def st_point_to_lsp_position(point: int, view: sublime.View) -> LspPosition:
 
 def prepare_code_review_request_doc(view: sublime.View):
     selection = view.sel()[0]
-    file_path = view.file_name() or f"buffer:{view.buffer().id()}"
     return {
         "text": view.substr(sublime.Region(0, view.size())),
-        "uri": file_path if file_path.startswith("buffer:") else filename_to_uri(file_path),
+        "uri": view_to_uri(view),
         "languageId": get_view_language_id(view),
-        "selection": st_region_to_lsp_range(selection, view),
+        "selection": region_to_range(view, selection),
         "version": view.change_count(),
     }
 
