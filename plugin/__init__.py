@@ -51,9 +51,11 @@ from .commands import (
     CopilotSignOutCommand,
     CopilotToggleConversationChatCommand,
 )
+from .constants import SERVER_VERSION
 from .helpers import CopilotIgnore
 from .listeners import EventListener, ViewEventListener, copilot_ignore_observer
 from .utils import all_windows
+from .version_manager import version_manager
 
 __all__ = (
     # ST: core
@@ -119,6 +121,9 @@ def plugin_loaded() -> None:
     copilot_ignore_observer.setup()
     for window in all_windows():
         CopilotIgnore(window).load_patterns()
+
+    version_manager.client_cls = CopilotPlugin
+    version_manager.server_version = SERVER_VERSION
 
 
 def plugin_unloaded() -> None:
