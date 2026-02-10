@@ -303,3 +303,49 @@ class CopilotUserDefinedPromptTemplates(TypedDict, total=True):
     description: str
     prompt: list[str]
     scopes: list[str]
+
+
+class CopilotModel(TypedDict, total=True):
+    modelFamily: str
+    modelName: str
+    scopes: list[str]
+
+
+# --------------------------- #
+#  Copilot Edit Chat Types   #
+# --------------------------- #
+
+
+class CopilotPayloadEditConversationCreate(TypedDict, total=True):
+    conversationId: str
+    """Unique identifier for the edit conversation"""
+    turnId: str
+    """Identifier for the initial turn in the edit conversation"""
+
+
+class CopilotPayloadEditConversationTurn(TypedDict, total=True):
+    conversationId: str
+    """Identifier for the edit conversation"""
+    turnId: str
+    """Identifier for this specific turn in the conversation"""
+    reply: str
+    """The assistant's reply"""
+    annotations: list[str]
+    """Metadata annotations for the turn"""
+    references: list[CopilotRequestConversationTurnReference | CopilotGitHubWebSearch]
+    """References to code or search results"""
+
+
+class CopilotRequestEditConversationTurn(TypedDict, total=True):
+    conversationId: str
+    """Identifier for the edit conversation"""
+    message: str
+    """User's message/request"""
+    workDoneToken: str
+    """Token for progress tracking"""
+    doc: CopilotDocType
+    """Document information for contextual editing"""
+    editOptions: dict[str, Any]
+    """Options related to the editing operation"""
+    source: Literal["panel", "inline"]
+    """Source of the edit conversation"""
