@@ -16,7 +16,7 @@ import sublime
 from LSP.plugin.core.protocol import Position as LspPosition
 from LSP.plugin.core.url import view_to_uri
 from LSP.plugin.core.views import position_to_offset, range_to_region, region_to_range
-from more_itertools import duplicates_everseen, first_true
+from more_itertools import duplicates_everseen, first, first_true
 from wcmatch import glob
 
 from .constants import COPILOT_WINDOW_SETTINGS_PREFIX, PACKAGE_NAME
@@ -446,20 +446,15 @@ class GitHelper:
     @staticmethod
     def get_user_language() -> str | None:
         """Get user's language preference from Sublime Text settings."""
-        # Try to get language from various Sublime Text settings
-        settings = sublime.load_settings("Preferences.sublime-settings")
+        import locale
 
-        # Check for explicit language setting
-        if lang := settings.get("language"):
-            return lang
+        lang_default = "en_US"
 
-        # Fallback to system locale
-        try:
-            import locale
+        lang = first(locale.getdefaultlocale()) or ""
+        if lang.upper() == "C":
+            return lang_default
 
-            return locale.getdefaultlocale()[0]
-        except Exception:
-            return "en-US"
+        return lang
 
     @classmethod
     def gather_git_commit_data(cls, view: sublime.View) -> dict[str, Any] | None:
