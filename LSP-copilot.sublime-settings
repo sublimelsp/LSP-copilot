@@ -8,7 +8,6 @@
 		"buffer",
 		"res"
 	],
-	"initializationOptions": {},
 	"settings": {
 		"auto_ask_completions": true,
 		"commit_completion_on_tab": true,
