@@ -454,7 +454,7 @@ class GitHelper:
         if lang.upper() == "C":
             return lang_default
 
-        return lang
+        return lang or lang_default
 
     @classmethod
     def gather_git_commit_data(cls, view: sublime.View) -> dict[str, Any] | None:
