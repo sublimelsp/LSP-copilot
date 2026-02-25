@@ -160,10 +160,11 @@ class CopilotPlugin(AbstractPlugin):
 
     @override
     @classmethod
-    def should_ignore(cls, view: sublime.View) -> bool:
-        if not (window := view.window()):
-            return False
-        return CopilotIgnore(window).trigger(view)
+    def is_applicable(cls, view: sublime.View, config: ClientConfig) -> bool:
+        return bool(
+            super().is_applicable(view, config)
+            and not ((window := view.window()) and CopilotIgnore(window).trigger(view))
+        )
 
     @override
     @classmethod
