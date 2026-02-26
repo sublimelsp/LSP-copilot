@@ -1,11 +1,11 @@
 [project]
-name = "LSP-copilot"
+name = "lsp-copilot"
 version = "0.0.0"
 description = "GitHub Copilot support for Sublime Text LSP plugin provided through Copilot.vim."
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-  "Jinja2==3.*",
+  "jinja2==3.*",
   "more-itertools>=10,<11",
   "requests>=2,<3",
   "typing-extensions>=4.12",
