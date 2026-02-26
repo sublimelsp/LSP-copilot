@@ -40,6 +40,15 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Prepare stubs
+        run: |
+          mkdir -p ~/stubs
+          # LSP
+          git clone --depth=1 --single-branch https://github.com/sublimelsp/LSP ~/stubs/LSP
+          ln -sfn ~/stubs/LSP typings/LSP
+          # lsp_utils
+          git clone --depth=1 --single-branch https://github.com/sublimelsp/lsp_utils ~/stubs/lsp_utils
+          ln -sfn ~/stubs/lsp_utils/lsp_utils typings/lsp_utils
       - name: Do linting
         run: |
           make ci-check
