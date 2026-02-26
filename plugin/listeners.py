@@ -53,7 +53,8 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
             return
 
         vcm = ViewCompletionManager(self.view)
-        vcm.handle_text_change()
+        if vcm.handle_text_change():
+            return
 
         if not self._is_saving and get_session_setting(session, "auto_ask_completions") and not vcm.is_waiting:
             plugin.request_get_completions(self.view)
