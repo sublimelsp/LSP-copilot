@@ -1,0 +1,153 @@
+<style>
+{{ include_asset('chat_panel.css') }}
+{{ include_asset('chat_panel.custom.css', use_cache=False) }}
+
+/* Edit plan specific styling */
+.edit-plan {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background-color: color(var(--background) blend(var(--foreground) 85%));
+  border-left: 3px solid var(--bluish);
+  border-radius: 3px;
+}
+
+.edit-plan strong {
+  color: var(--bluish);
+  font-weight: bold;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.edit-plan-content {
+  color: color(var(--foreground) alpha(0.8));
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Edit description (overall-description-generated) styling */
+.edit-description {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background-color: color(var(--background) blend(var(--foreground) 3%));
+  border-left: 3px solid var(--greenish);
+  border-radius: 3px;
+}
+
+.edit-description strong {
+  color: var(--greenish);
+  font-weight: bold;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.edit-description-content {
+  color: color(var(--foreground) alpha(0.9));
+  line-height: 1.4;
+}
+</style>
+
+<div class="navbar">
+  <div class="conversation-actions">
+    <a class="icon-link" title="Destroy Edit Conversation" href='{{ destroy_url }}'><img class="icon" src="{{ asset_url('trash.png') }}"></a>
+    <a class="close" title="Close Edit Conversation" href='{{ close_url }}'><img class="icon" src="{{ asset_url('close.png') }}"></a>
+  </div>
+  <h3 class="suggested-title">
+    {% if is_waiting %} ⌛ {% endif %}Copilot Edit Conversation
+  </h3>
+</div>
+
+---
+
+{% if source_file %}
+<div class="header">
+  <div class="kind system">
+    <img class="icon" src="{{ asset_url('github.png') }}"> Editing: {{ source_file }}
+  </div>
+</div>
+
+---
+{% endif %}
+
+{% for section in sections %}
+
+<div class="header">
+  {% if section.kind == "assistant" or section.kind == "report" %}
+    <a class="rating" title="Thumbs Up" href='{{ section.thumbs_up_url }}'><img class="icon" src="{{ asset_url('thumbs_up.png') }}"></a>
+    <a class="rating" title="Thumbs Down" href='{{ section.thumbs_down_url }}'><img class="icon" src="{{ asset_url('thumbs_down.png') }}"></a>
+  {% else %}
+    <a class="delete" title="Delete Turn" href='{{ section.turn_delete_url }}'><img class="icon delete-icon" src="{{ asset_url('trash.png') }}"></a>
+  {% endif %}
+</div>
+
+<div class="kind {{ section.kind }}">
+  {%- if section.kind == "assistant" or section.kind == "report" -%}
+    <img class="icon" src="{{ asset_url('github.png') }}"> Github Copilot
+  {%- else -%}
+    {% if avatar_img_src %}<img class="icon" src="{{ avatar_img_src }}">{% endif %} {{ section.kind }}
+  {%- endif -%}
+</div>
+
+{% if "edit-plan" in section.annotations %}
+<div class="edit-plan">
+  <strong>Planned work</strong>
+  <div class="edit-plan-content">{{ section.message | safe }}</div>
+</div>
+{% elif "edit-description" in section.annotations %}
+<div class="edit-description">
+  <strong>Overview</strong>
+  <div class="edit-description-content">{{ section.message | safe }}</div>
+</div>
+{% else %}
+{{ section.message | safe }}
+{% endif %}
+
+---
+
+{% endfor %}
+
+{% if pending_edits %}
+<div class="header">
+  <div class="kind system">
+    <img class="icon" src="{{ asset_url('github.png') }}"> Pending Edits ({{ pending_edits|length }})
+  </div>
+</div>
+
+{% for edit in pending_edits %}
+<div class="edit-block">
+  <div class="edit-header">
+    <strong>Edit {{ loop.index }}</strong>
+    {% if edit.range %}
+      <span class="edit-location">
+        {% if edit.range.start.line == edit.range.end.line %}
+          Line {{ edit.range.start.line + 1 }}
+        {% else %}
+          Lines {{ edit.range.start.line + 1 }}-{{ edit.range.end.line + 1 }}
+        {% endif %}
+      </span>
+    {% endif %}
+  </div>
+  
+  {% if edit.newText %}
+    <div class="edit-content">
+      <pre><code>{{ edit.newText }}</code></pre>
+    </div>
+  {% else %}
+    <div class="edit-content">
+      <em>[Text removal]</em>
+    </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<div class="apply-edits">
+  <a class="apply-button" href='{{ apply_edits_url }}'>Apply All Edits</a>
+</div>
+
+---
+{% endif %}
+
+{% if is_waiting %}
+<div class="waiting-message">
+  <em>Waiting for Copilot response...</em>
+</div>
+{% endif %} 

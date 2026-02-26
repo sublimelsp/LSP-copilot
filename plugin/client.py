@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import json
+import uuid
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -15,6 +16,12 @@ from lsp_utils import notification_handler, request_handler
 from typing_extensions import override
 
 from .constants import (
+    EDIT_STATUS_BEGIN,
+    EDIT_STATUS_CODE_GENERATED,
+    EDIT_STATUS_END,
+    EDIT_STATUS_NO_CODE_BLOCKS,
+    EDIT_STATUS_OVERALL_DESCRIPTION,
+    EDIT_STATUS_PLAN_GENERATED,
     NTFY_FEATURE_FLAGS_NOTIFICATION,
     NTFY_LOG_MESSAGE,
     NTFY_PANEL_SOLUTION,
@@ -22,9 +29,15 @@ from .constants import (
     NTFY_STATUS_NOTIFICATION,
     PACKAGE_NAME,
     REQ_CHECK_STATUS,
+    REQ_CONVERSATION_AGENTS,
     REQ_CONVERSATION_CONTEXT,
+    REQ_CONVERSATION_PRECONDITIONS,
+    REQ_CONVERSATION_TEMPLATES,
+    REQ_COPILOT_MODELS,
     REQ_GET_COMPLETIONS,
     REQ_GET_COMPLETIONS_CYCLING,
+    REQ_GET_PANEL_COMPLETIONS,
+    REQ_NOTIFY_SHOWN,
 )
 from .helpers import (
     ActivityIndicator,
@@ -40,6 +53,7 @@ from .types import (
     AccountStatus,
     CopilotPayloadCompletions,
     CopilotPayloadConversationContext,
+    CopilotPayloadConversationEntry,
     CopilotPayloadFeatureFlagsNotification,
     CopilotPayloadLogMessage,
     CopilotPayloadPanelSolution,
@@ -48,7 +62,12 @@ from .types import (
     NetworkProxy,
     T_Callable,
 )
-from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager
+from .ui import (
+    ViewCompletionManager,
+    ViewPanelCompletionManager,
+    WindowConversationManager,
+    WindowEditConversationManager,
+)
 from .utils import (
     all_views,
     all_windows,
@@ -326,27 +345,146 @@ class CopilotPlugin(AbstractPlugin):
 
     def on_server_notification_async(self, notification: Notification) -> None:
         if notification.method == "$/progress":
-            if (
-                (token := notification.params["token"]).startswith("copilot_chat://")
-                and (params := notification.params["value"])
-                and (window := WindowConversationManager.find_window_by_token_id(token))
-            ):
-                wcm = WindowConversationManager(window)
-                if params.get("kind", None) == "end":
-                    wcm.is_waiting = False
+            token = notification.params.get("token", "")
+            params = notification.params.get("value")
 
-                if suggest_title := params.get("suggestedTitle", None):
-                    wcm.suggested_title = suggest_title
+            if not params:
+                return
 
-                if edit_agent_rounds := params.get("editAgentRounds", []):
-                    params.setdefault("reply", edit_agent_rounds[-1].get("reply", ""))
-                    wcm.append_conversation_entry(params)
+            if token.startswith("copilot_chat://"):
+                self._handle_chat_progress(token, params)
+            elif token.startswith("copilot_pedit://"):
+                self._handle_edit_progress(token, params)
 
-                if followup := params.get("followUp", None):
-                    message = followup.get("message", "")
-                    wcm.follow_up = message
+    def _handle_chat_progress(self, token: str, params: Any) -> None:
+        """Handle progress notifications for chat conversations."""
+        window = WindowConversationManager.find_window_by_token_id(token)
+        if not window:
+            return
 
-                wcm.update()
+        wcm = WindowConversationManager(window)
+        needs_update = False
+
+        if params.get("kind") == "end":
+            wcm.is_waiting = False
+            needs_update = True
+
+        if suggest_title := params.get("suggestedTitle"):
+            wcm.suggested_title = suggest_title
+            needs_update = True
+
+        if edit_agent_rounds := params.get("editAgentRounds", []):
+            params.setdefault("reply", edit_agent_rounds[-1].get("reply", ""))
+            wcm.append_conversation_entry(params)
+            needs_update = True
+
+        if followup := params.get("followUp"):
+            wcm.follow_up = followup.get("message", "")
+            needs_update = True
+
+        if needs_update:
+            wcm.update()
+
+    def _handle_edit_progress(self, token: str, params: list[dict[str, Any]]) -> None:
+        """Handle progress notifications for edit conversations."""
+        window = WindowConversationManager.find_window_by_token_id(token)
+        if not window:
+            return
+
+        wecm = WindowEditConversationManager(window)
+        needs_update = False
+
+        for update in params:
+            if "editConversationId" in update:
+                wecm.conversation_id = update["editConversationId"]
+                needs_update = True
+
+                # Handle different file generation statuses
+                status = update.get("fileGenerationStatus")
+                if status == EDIT_STATUS_BEGIN:
+                    wecm.is_waiting = True
+                    wecm.open()
+                elif status == EDIT_STATUS_END:
+                    wecm.is_waiting = False
+                elif status == EDIT_STATUS_NO_CODE_BLOCKS:
+                    self._handle_no_code_blocks_response(wecm, update)
+                elif status in (EDIT_STATUS_PLAN_GENERATED, EDIT_STATUS_OVERALL_DESCRIPTION):
+                    self._handle_edit_description_response(wecm, update)
+                elif status == EDIT_STATUS_CODE_GENERATED:
+                    self._handle_code_generated_response(wecm, update)
+
+        if needs_update:
+            wecm.update()
+
+    def _create_conversation_entry(
+        self, conversation_id: str, reply: str, turn_id: str | None = None, kind: str = "report"
+    ) -> CopilotPayloadConversationEntry:
+        """Helper method to create a standardized conversation entry."""
+        return {
+            "kind": kind,
+            "conversationId": conversation_id,
+            "reply": reply,
+            "turnId": turn_id or str(uuid.uuid4()),
+            "references": [],
+            "annotations": [],
+            "hideText": False,
+            "warnings": [],
+        }
+
+    def _handle_no_code_blocks_response(self, wecm: WindowEditConversationManager, update: dict[str, Any]) -> None:
+        """Handle the no-code-blocks-found response."""
+        entry = self._create_conversation_entry(wecm.conversation_id, update["rawResponse"], update.get("editTurnId"))
+        wecm.append_conversation_entry(entry)
+        wecm.is_waiting = False
+
+    def _handle_edit_description_response(self, wecm: WindowEditConversationManager, update: dict[str, Any]) -> None:
+        """Handle edit plan or description generated responses."""
+        if "editDescription" in update:
+            entry = self._create_conversation_entry(
+                wecm.conversation_id, update["editDescription"], update.get("editTurnId")
+            )
+            # Use annotations to store metadata for template processing
+            status = update.get("fileGenerationStatus")
+            if status == EDIT_STATUS_PLAN_GENERATED:
+                entry["annotations"] = ["edit-plan"]
+            elif status == EDIT_STATUS_OVERALL_DESCRIPTION:
+                entry["annotations"] = ["edit-description"]
+
+            wecm.append_conversation_entry(entry)
+
+    def _handle_code_generated_response(self, wecm: WindowEditConversationManager, update: dict[str, Any]) -> None:
+        """Handle updated code generated responses."""
+        if "partialText" not in update:
+            return
+
+        # Format the code with proper markdown code fence
+        language_id = update.get("languageId", "")
+        code_content = update["partialText"]
+        markdown_reply = f"```{language_id}\n{code_content}\n```"
+
+        # Add conversation entry
+        entry = self._create_conversation_entry(wecm.conversation_id, markdown_reply, update.get("editTurnId"))
+        wecm.append_conversation_entry(entry)
+
+        # Add as a pending edit for the entire file
+        self._add_full_file_edit(wecm, code_content)
+
+    def _add_full_file_edit(self, wecm: WindowEditConversationManager, code_content: str) -> None:
+        """Add a pending edit that replaces the entire file content."""
+        source_view = wecm.get_source_view()
+        if not source_view:
+            return
+
+        # Calculate the range for the entire file
+        file_content = source_view.substr(sublime.Region(0, source_view.size()))
+        lines = file_content.split("\n")
+        last_line = len(lines) - 1
+        last_char = len(lines[-1]) if lines else 0
+
+        wecm.add_pending_edit({
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": last_line, "character": last_char}},
+            "newText": code_content,
+        })
 
     @notification_handler(NTFY_FEATURE_FLAGS_NOTIFICATION)
     def _handle_feature_flags_notification(self, payload: CopilotPayloadFeatureFlagsNotification) -> None:
@@ -470,3 +608,51 @@ class CopilotPlugin(AbstractPlugin):
 
         preprocess_completions(view, completions)
         vcm.show(completions, 0, get_session_setting(session, "completion_style"))
+
+    @notification_handler(REQ_NOTIFY_SHOWN)
+    def _handle_notify_shown_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(REQ_COPILOT_MODELS)
+    def _handle_copilot_models_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(REQ_CONVERSATION_AGENTS)
+    def _handle_conversation_agents_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(REQ_CONVERSATION_PRECONDITIONS)
+    def _handle_conversation_preconditions_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(REQ_CONVERSATION_TEMPLATES)
+    def _handle_conversation_templates_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(REQ_GET_PANEL_COMPLETIONS)
+    def _handle_get_panel_completions_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(EDIT_STATUS_BEGIN)
+    def _handle_edit_status_begin_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(EDIT_STATUS_END)
+    def _handle_edit_status_end_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(EDIT_STATUS_PLAN_GENERATED)
+    def _handle_edit_status_plan_generated_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(EDIT_STATUS_OVERALL_DESCRIPTION)
+    def _handle_edit_status_overall_description_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(EDIT_STATUS_CODE_GENERATED)
+    def _handle_edit_status_code_generated_notification(self, payload: Any) -> None:
+        pass
+
+    @notification_handler(EDIT_STATUS_NO_CODE_BLOCKS)
+    def _handle_edit_status_no_code_blocks_notification(self, payload: Any) -> None:
+        pass
