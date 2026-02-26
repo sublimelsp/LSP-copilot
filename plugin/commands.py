@@ -285,20 +285,18 @@ class CopilotConversationChatCommand(CopilotTextCommand):
                 "hideText": False,
                 "warnings": [],
             })
+        req_params: dict[str, Any] = {
+            "turns": [{"request": msg}],
+            "capabilities": {
+                "allSkills": True,
+                "skills": [],
+            },
+            "workDoneToken": f"copilot_chat://{window.id()}",
+            "computeSuggestions": True,
+            "source": "panel",
+        }
         session.send_request(
-            Request(
-                REQ_CONVERSATION_CREATE,
-                {
-                    "turns": [{"request": msg}],
-                    "capabilities": {
-                        "allSkills": True,
-                        "skills": [],
-                    },
-                    "workDoneToken": f"copilot_chat://{window.id()}",
-                    "computeSuggestions": True,
-                    "source": "panel",
-                },
-            ),
+            Request(REQ_CONVERSATION_CREATE, req_params),
             lambda msg: self._on_result_conversation_create(plugin, session, msg),
         )
         wcm.is_waiting = True
@@ -417,14 +415,12 @@ class CopilotConversationDestroyCommand(CopilotTextCommand):
             status_message("Failed to find window or conversation.")
             return
 
+        req_params: dict[str, Any] = {
+            "conversationId": conversation_id,
+            "options": {},
+        }
         session.send_request(
-            Request(
-                REQ_CONVERSATION_DESTROY,
-                {
-                    "conversationId": conversation_id,
-                    "options": {},
-                },
-            ),
+            Request(REQ_CONVERSATION_DESTROY, req_params),
             self._on_result_conversation_destroy,
         )
 
@@ -494,15 +490,13 @@ class CopilotConversationTurnDeleteCommand(CopilotTextCommand):
             return
         retrieved_turn_id = wcm.conversation[index]["turnId"]
 
+        req_params: dict[str, Any] = {
+            "conversationId": conversation_id,
+            "turnId": retrieved_turn_id,
+            "options": {},
+        }
         session.send_request(
-            Request(
-                REQ_CONVERSATION_TURN_DELETE,
-                {
-                    "conversationId": conversation_id,
-                    "turnId": retrieved_turn_id,
-                    "options": {},
-                },
-            ),
+            Request(REQ_CONVERSATION_TURN_DELETE, req_params),
             lambda x: self._on_result_conversation_turn_delete(window_id, conversation_id, turn_id, x),
         )
 
