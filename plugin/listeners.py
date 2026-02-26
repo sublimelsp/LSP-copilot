@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, final
 
 import sublime
 import sublime_plugin
+from typing_extensions import override
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 from watchdog.observers.api import ObservedWatch
 
 from .client import CopilotPlugin
+from .constants import PACKAGE_NAME
 from .decorators import must_be_active_view
 from .helpers import CopilotIgnore
 from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager
@@ -22,6 +24,7 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
         super().__init__(view)
 
     @classmethod
+    @override
     def applies_to_primary_view_only(cls) -> bool:
         # To fix "https://github.com/TerminalFi/LSP-copilot/issues/102",
         # let cloned views trigger their event listeners too.
@@ -59,17 +62,9 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
             plugin.request_get_completions(self.view)
 
     def on_activated_async(self) -> None:
+        self.view.run_command('lsp_check_applicable', {'session_name': PACKAGE_NAME})
         _, session = CopilotPlugin.plugin_session(self.view)
-
-        #        if (session and CopilotPlugin.should_ignore(self.view)) or (
-        #            not session and not CopilotPlugin.should_ignore(self.view)
-        #        ):
-        # Hacky way to trigger adding and removing views from session
-        #           prev_setting = self.view.settings().get("lsp_uri")
-        #           self.view.settings().set("lsp_uri", "")
-        #           sublime.set_timeout_async(lambda: self.view.settings().set("lsp_uri", prev_setting), 5)
-
-        if session and not CopilotPlugin.should_ignore(self.view):
+        if session and CopilotPlugin.is_applicable(self.view, session.config):
             if (window := self.view.window()) and self.view.name() != "Copilot Chat":
                 WindowConversationManager(window).last_active_view_id = self.view.id()
 
@@ -167,14 +162,17 @@ class EventListener(sublime_plugin.EventListener):
         copilot_ignore_observer.remove_folders(window.folders())
 
 
+@final
 class CopilotIgnoreHandler(FileSystemEventHandler):
     def __init__(self) -> None:
         self.filename = ".copilotignore"
 
+    @override
     def on_modified(self, event: FileSystemEvent) -> None:
         if not event.is_directory and event.src_path.endswith(self.filename):
             self.update_window_patterns(event.src_path)
 
+    @override
     def on_created(self, event: FileSystemEvent) -> None:
         if not event.is_directory and event.src_path.endswith(self.filename):
             self.update_window_patterns(event.src_path)
@@ -195,6 +193,7 @@ class CopilotIgnoreHandler(FileSystemEventHandler):
         return matching_folder
 
 
+@final
 class CopilotIgnoreObserver:
     def __init__(self, folders: Iterable[str] | None = None) -> None:
         self.observer = Observer()
