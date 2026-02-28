@@ -7,7 +7,7 @@ assert __package__
 PACKAGE_NAME = __package__.partition(".")[0]
 PLATFORM_ARCH = f"{sublime.platform()}_{sublime.arch()}"
 
-SERVER_VERSION = "1.427.0"
+SERVER_VERSION = "1.436.0"
 """The server tag. You can find them on https://github.com/github/copilot-language-server-release/releases"""
 
 # ---------------- #
