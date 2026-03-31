@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Tuple, TypedDict, TypeVar
-
 from LSP.plugin.core.protocol import Position as LspPosition
 from LSP.plugin.core.protocol import Range as LspRange
 from LSP.plugin.core.typing import StrEnum
+from typing import Any
+from typing import Callable
+from typing import Literal
+from typing import Tuple
+from typing import TypedDict
+from typing import TypeVar
 
 T_Callable = TypeVar("T_Callable", bound=Callable[..., Any])
 

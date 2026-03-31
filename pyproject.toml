@@ -87,5 +87,15 @@ select = [
   "UP",
   "FURB",
   "SIM",
+  "F401",
 ]
 ignore = ["E203", "SIM102", "SIM108"]
+preview = true
+
+[tool.ruff.lint.isort]
+case-sensitive = false
+force-single-line = true
+from-first = true
+no-sections = true
+order-by-type = false
+required-imports = ["from __future__ import annotations"]

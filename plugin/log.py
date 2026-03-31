@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
-import sublime
-
 from .constants import PACKAGE_NAME
+from typing import Any
+import sublime
 
 
 def log_debug(message: str) -> None:

@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+from ..constants import COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX
+from ..helpers import GithubInfo
+from ..helpers import preprocess_message_for_html
+from ..template import load_resource_template
+from ..types import CopilotPayloadConversationEntry
+from ..types import CopilotPayloadConversationEntryTransformed
+from ..types import StLayout
+from ..utils import find_view_by_id
+from ..utils import find_window_by_id
+from ..utils import get_copilot_setting
+from ..utils import remove_prefix
+from ..utils import set_copilot_setting
 from typing import Callable
-
 import mdpopups
 import sublime
-
-from ..constants import COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX
-from ..helpers import GithubInfo, preprocess_message_for_html
-from ..template import load_resource_template
-from ..types import CopilotPayloadConversationEntry, CopilotPayloadConversationEntryTransformed, StLayout
-from ..utils import find_view_by_id, find_window_by_id, get_copilot_setting, remove_prefix, set_copilot_setting
 
 
 class WindowConversationManager:

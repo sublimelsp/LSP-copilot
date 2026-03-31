@@ -1,46 +1,48 @@
 from __future__ import annotations
 
+from .constants import COPILOT_WINDOW_SETTINGS_PREFIX
+from .constants import PACKAGE_NAME
+from .log import log_error
+from .settings import get_plugin_setting_dotted
+from .types import CopilotConversationTemplates
+from .types import CopilotDocType
+from .types import CopilotGitHubWebSearch
+from .types import CopilotPayloadCompletion
+from .types import CopilotPayloadPanelSolution
+from .types import CopilotRequestConversationTurn
+from .types import CopilotRequestConversationTurnReference
+from .types import CopilotUserDefinedPromptTemplates
+from .utils import all_views
+from .utils import all_windows
+from .utils import drop_falsy
+from .utils import erase_copilot_setting
+from .utils import erase_copilot_view_setting
+from .utils import get_copilot_setting
+from .utils import get_project_relative_path
+from .utils import get_view_language_id
+from .utils import set_copilot_setting
+from LSP.plugin.core.protocol import Position as LspPosition
+from LSP.plugin.core.url import view_to_uri
+from LSP.plugin.core.views import position_to_offset
+from LSP.plugin.core.views import range_to_region
+from LSP.plugin.core.views import region_to_range
+from more_itertools import duplicates_everseen
+from more_itertools import first_true
+from operator import itemgetter
+from pathlib import Path
+from typing import Any
+from typing import Callable
+from typing import cast
+from typing import Literal
+from typing import Sequence
+from wcmatch import glob
 import itertools
 import os
 import re
-import threading
-import time
-from operator import itemgetter
-from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, cast
-
 import requests
 import sublime
-from LSP.plugin.core.protocol import Position as LspPosition
-from LSP.plugin.core.url import view_to_uri
-from LSP.plugin.core.views import position_to_offset, range_to_region, region_to_range
-from more_itertools import duplicates_everseen, first_true
-from wcmatch import glob
-
-from .constants import COPILOT_WINDOW_SETTINGS_PREFIX, PACKAGE_NAME
-from .log import log_error
-from .settings import get_plugin_setting_dotted
-from .types import (
-    CopilotConversationTemplates,
-    CopilotDocType,
-    CopilotGitHubWebSearch,
-    CopilotPayloadCompletion,
-    CopilotPayloadPanelSolution,
-    CopilotRequestConversationTurn,
-    CopilotRequestConversationTurnReference,
-    CopilotUserDefinedPromptTemplates,
-)
-from .utils import (
-    all_views,
-    all_windows,
-    drop_falsy,
-    erase_copilot_setting,
-    erase_copilot_view_setting,
-    get_copilot_setting,
-    get_project_relative_path,
-    get_view_language_id,
-    set_copilot_setting,
-)
+import threading
+import time
 
 
 class ActivityIndicator:

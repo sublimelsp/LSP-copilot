@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+from .constants import PACKAGE_NAME
 from functools import lru_cache
 from typing import Any
-
 import jmespath
 import sublime
-
-from .constants import PACKAGE_NAME
 
 
 @lru_cache

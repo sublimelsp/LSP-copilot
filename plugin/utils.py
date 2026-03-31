@@ -1,28 +1,36 @@
 from __future__ import annotations
 
+from .constants import COPILOT_VIEW_SETTINGS_PREFIX
+from .constants import PACKAGE_NAME
+from .types import T_Callable
+from collections.abc import Callable
+from collections.abc import Generator
+from collections.abc import Iterable
+from functools import wraps
+from LSP.plugin.core.sessions import Session
+from LSP.plugin.core.types import basescope2languageid
+from more_itertools import first
+from more_itertools import first_true
+from pathlib import Path
+from typing import Any
+from typing import cast
+from typing import IO
+from typing import Mapping
+from typing import Sequence
+from typing import TypeVar
+from typing import Union
 import contextlib
 import gzip
 import io
 import os
 import re
 import shutil
+import sublime
 import sys
 import tarfile
 import threading
 import urllib.request
 import zipfile
-from collections.abc import Callable, Generator, Iterable
-from functools import wraps
-from pathlib import Path
-from typing import IO, Any, Mapping, Sequence, TypeVar, Union, cast
-
-import sublime
-from LSP.plugin.core.sessions import Session
-from LSP.plugin.core.types import basescope2languageid
-from more_itertools import first, first_true
-
-from .constants import COPILOT_VIEW_SETTINGS_PREFIX, PACKAGE_NAME
-from .types import T_Callable
 
 _T = TypeVar("_T")
 _KT = TypeVar("_KT")

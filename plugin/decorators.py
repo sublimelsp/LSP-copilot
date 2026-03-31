@@ -1,10 +1,11 @@
-from functools import wraps
-from typing import Any, Callable, cast
+from __future__ import annotations
 
 from .types import T_Callable
-from .utils import (
-    is_active_view,
-)
+from .utils import is_active_view
+from functools import wraps
+from typing import Any
+from typing import Callable
+from typing import cast
 
 
 def must_be_active_view(*, failed_return: Any = None) -> Callable[[T_Callable], T_Callable]:

@@ -1,63 +1,65 @@
 from __future__ import annotations
 
-import functools
-import json
-import weakref
+from .constants import NTFY_FEATURE_FLAGS_NOTIFICATION
+from .constants import NTFY_LOG_MESSAGE
+from .constants import NTFY_PANEL_SOLUTION
+from .constants import NTFY_PANEL_SOLUTION_DONE
+from .constants import NTFY_STATUS_NOTIFICATION
+from .constants import PACKAGE_NAME
+from .constants import REQ_CHECK_STATUS
+from .constants import REQ_CONVERSATION_CONTEXT
+from .constants import REQ_GET_COMPLETIONS
+from .constants import REQ_GET_COMPLETIONS_CYCLING
+from .helpers import ActivityIndicator
+from .helpers import CopilotIgnore
+from .helpers import GithubInfo
+from .helpers import prepare_completion_request_doc
+from .helpers import preprocess_completions
+from .helpers import preprocess_panel_completions
+from .log import log_error
+from .log import log_info
+from .log import log_warning
+from .template import load_string_template
+from .types import AccountStatus
+from .types import CopilotPayloadCompletions
+from .types import CopilotPayloadConversationContext
+from .types import CopilotPayloadFeatureFlagsNotification
+from .types import CopilotPayloadLogMessage
+from .types import CopilotPayloadPanelSolution
+from .types import CopilotPayloadSignInConfirm
+from .types import CopilotPayloadStatusNotification
+from .types import NetworkProxy
+from .types import T_Callable
+from .ui import ViewCompletionManager
+from .ui import ViewPanelCompletionManager
+from .ui import WindowConversationManager
+from .utils import all_views
+from .utils import all_windows
+from .utils import debounce
+from .utils import find_view_by_id
+from .utils import get_session_setting
+from .utils import status_message
+from .version_manager import version_manager
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, cast
-from urllib.parse import urlparse
-
-import sublime
-from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
-from lsp_utils import notification_handler, request_handler
+from LSP.plugin import AbstractPlugin
+from LSP.plugin import ClientConfig
+from LSP.plugin import DottedDict
+from LSP.plugin import Notification
+from LSP.plugin import Request
+from LSP.plugin import Session
+from LSP.plugin import WorkspaceFolder
+from lsp_utils import notification_handler
+from lsp_utils import request_handler
+from typing import Any
+from typing import cast
 from typing_extensions import override
-
-from .constants import (
-    NTFY_FEATURE_FLAGS_NOTIFICATION,
-    NTFY_LOG_MESSAGE,
-    NTFY_PANEL_SOLUTION,
-    NTFY_PANEL_SOLUTION_DONE,
-    NTFY_STATUS_NOTIFICATION,
-    PACKAGE_NAME,
-    REQ_CHECK_STATUS,
-    REQ_CONVERSATION_CONTEXT,
-    REQ_GET_COMPLETIONS,
-    REQ_GET_COMPLETIONS_CYCLING,
-)
-from .helpers import (
-    ActivityIndicator,
-    CopilotIgnore,
-    GithubInfo,
-    prepare_completion_request_doc,
-    preprocess_completions,
-    preprocess_panel_completions,
-)
-from .log import log_error, log_info, log_warning
-from .template import load_string_template
-from .types import (
-    AccountStatus,
-    CopilotPayloadCompletions,
-    CopilotPayloadConversationContext,
-    CopilotPayloadFeatureFlagsNotification,
-    CopilotPayloadLogMessage,
-    CopilotPayloadPanelSolution,
-    CopilotPayloadSignInConfirm,
-    CopilotPayloadStatusNotification,
-    NetworkProxy,
-    T_Callable,
-)
-from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager
-from .utils import (
-    all_views,
-    all_windows,
-    debounce,
-    find_view_by_id,
-    get_session_setting,
-    status_message,
-)
-from .version_manager import version_manager
+from urllib.parse import urlparse
+import functools
+import json
+import sublime
+import weakref
 
 WindowId = int
 

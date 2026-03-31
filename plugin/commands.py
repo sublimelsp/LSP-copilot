@@ -1,82 +1,80 @@
 from __future__ import annotations
 
-import json
-import os
-import uuid
+from .client import CopilotPlugin
+from .constants import COPILOT_OUTPUT_PANEL_PREFIX
+from .constants import PACKAGE_NAME
+from .constants import REQ_CHECK_STATUS
+from .constants import REQ_CONVERSATION_AGENTS
+from .constants import REQ_CONVERSATION_CREATE
+from .constants import REQ_CONVERSATION_DESTROY
+from .constants import REQ_CONVERSATION_PRECONDITIONS
+from .constants import REQ_CONVERSATION_RATING
+from .constants import REQ_CONVERSATION_TEMPLATES
+from .constants import REQ_CONVERSATION_TURN
+from .constants import REQ_CONVERSATION_TURN_DELETE
+from .constants import REQ_FILE_CHECK_STATUS
+from .constants import REQ_GET_PANEL_COMPLETIONS
+from .constants import REQ_GET_PROMPT
+from .constants import REQ_GET_VERSION
+from .constants import REQ_NOTIFY_ACCEPTED
+from .constants import REQ_NOTIFY_REJECTED
+from .constants import REQ_SIGN_IN_CONFIRM
+from .constants import REQ_SIGN_IN_INITIATE
+from .constants import REQ_SIGN_IN_WITH_GITHUB_TOKEN
+from .constants import REQ_SIGN_OUT
+from .decorators import must_be_active_view
+from .helpers import GithubInfo
+from .helpers import prepare_completion_request_doc
+from .helpers import prepare_conversation_turn_request
+from .helpers import preprocess_chat_message
+from .helpers import preprocess_message_for_html
+from .log import log_info
+from .types import CopilotConversationDebugTemplates
+from .types import CopilotPayloadConversationCreate
+from .types import CopilotPayloadConversationPreconditions
+from .types import CopilotPayloadConversationTemplate
+from .types import CopilotPayloadFileStatus
+from .types import CopilotPayloadGetVersion
+from .types import CopilotPayloadNotifyAccepted
+from .types import CopilotPayloadNotifyRejected
+from .types import CopilotPayloadPanelCompletionSolutionCount
+from .types import CopilotPayloadSignInConfirm
+from .types import CopilotPayloadSignInInitiate
+from .types import CopilotPayloadSignOut
+from .types import CopilotRequestConversationAgent
+from .types import CopilotUserDefinedPromptTemplates
+from .types import T_Callable
+from .ui import ViewCompletionManager
+from .ui import ViewPanelCompletionManager
+from .ui import WindowConversationManager
+from .utils import find_index_by_key_value
+from .utils import find_view_by_id
+from .utils import find_window_by_id
+from .utils import get_session_setting
+from .utils import message_dialog
+from .utils import mutable_view
+from .utils import ok_cancel_dialog
+from .utils import status_message
 from abc import ABC
 from collections.abc import Callable
-from functools import partial, wraps
-from pathlib import Path
-from typing import Any, Literal, Sequence, cast
-
-import sublime
-import sublime_plugin
-from LSP.plugin import Request, Session
-from LSP.plugin.core.registry import LspTextCommand, LspWindowCommand
+from functools import partial
+from functools import wraps
+from LSP.plugin import Request
+from LSP.plugin import Session
+from LSP.plugin.core.registry import LspTextCommand
+from LSP.plugin.core.registry import LspWindowCommand
 from LSP.plugin.core.url import filename_to_uri
 from lsp_utils.helpers import rmtree_ex
-
-from .client import CopilotPlugin
-from .constants import (
-    COPILOT_OUTPUT_PANEL_PREFIX,
-    PACKAGE_NAME,
-    REQ_CHECK_STATUS,
-    REQ_CONVERSATION_AGENTS,
-    REQ_CONVERSATION_CREATE,
-    REQ_CONVERSATION_DESTROY,
-    REQ_CONVERSATION_PRECONDITIONS,
-    REQ_CONVERSATION_RATING,
-    REQ_CONVERSATION_TEMPLATES,
-    REQ_CONVERSATION_TURN,
-    REQ_CONVERSATION_TURN_DELETE,
-    REQ_FILE_CHECK_STATUS,
-    REQ_GET_PANEL_COMPLETIONS,
-    REQ_GET_PROMPT,
-    REQ_GET_VERSION,
-    REQ_NOTIFY_ACCEPTED,
-    REQ_NOTIFY_REJECTED,
-    REQ_SIGN_IN_CONFIRM,
-    REQ_SIGN_IN_INITIATE,
-    REQ_SIGN_IN_WITH_GITHUB_TOKEN,
-    REQ_SIGN_OUT,
-)
-from .decorators import must_be_active_view
-from .helpers import (
-    GithubInfo,
-    prepare_completion_request_doc,
-    prepare_conversation_turn_request,
-    preprocess_chat_message,
-    preprocess_message_for_html,
-)
-from .log import log_info
-from .types import (
-    CopilotConversationDebugTemplates,
-    CopilotPayloadConversationCreate,
-    CopilotPayloadConversationPreconditions,
-    CopilotPayloadConversationTemplate,
-    CopilotPayloadFileStatus,
-    CopilotPayloadGetVersion,
-    CopilotPayloadNotifyAccepted,
-    CopilotPayloadNotifyRejected,
-    CopilotPayloadPanelCompletionSolutionCount,
-    CopilotPayloadSignInConfirm,
-    CopilotPayloadSignInInitiate,
-    CopilotPayloadSignOut,
-    CopilotRequestConversationAgent,
-    CopilotUserDefinedPromptTemplates,
-    T_Callable,
-)
-from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager
-from .utils import (
-    find_index_by_key_value,
-    find_view_by_id,
-    find_window_by_id,
-    get_session_setting,
-    message_dialog,
-    mutable_view,
-    ok_cancel_dialog,
-    status_message,
-)
+from pathlib import Path
+from typing import Any
+from typing import cast
+from typing import Literal
+from typing import Sequence
+import json
+import os
+import sublime
+import sublime_plugin
+import uuid
 
 REQUIRE_NOTHING = 0
 REQUIRE_SIGN_IN = 1 << 0
