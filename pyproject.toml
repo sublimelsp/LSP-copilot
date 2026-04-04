@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
   "jinja2==3.*",
-  "more-itertools>=10,<11",
+  "more-itertools>=11,<12",
   "requests>=2,<3",
   "typing-extensions>=4.12",
   "watchdog>=4,<5",
