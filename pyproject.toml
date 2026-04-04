@@ -87,10 +87,8 @@ select = [
   "UP",
   "FURB",
   "SIM",
-  "F401",
 ]
 ignore = ["E203", "SIM102", "SIM108"]
-preview = true
 
 [tool.ruff.lint.isort]
 case-sensitive = false
