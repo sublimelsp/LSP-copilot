@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from .constants import PACKAGE_NAME
-from .constants import PLATFORM_ARCH
-from .log import log_info
-from .utils import decompress_buffer
-from .utils import rmtree_ex
-from .utils import simple_urlopen
-from LSP.plugin import AbstractPlugin
-from pathlib import Path
 import io
+from pathlib import Path
+
+from LSP.plugin import AbstractPlugin
+
+from .constants import PACKAGE_NAME, PLATFORM_ARCH
+from .log import log_info
+from .utils import decompress_buffer, rmtree_ex, simple_urlopen
 
 
 class VersionManager:

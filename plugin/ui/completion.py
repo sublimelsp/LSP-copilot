@@ -1,21 +1,24 @@
 from __future__ import annotations
 
-from ..template import load_resource_template
-from ..types import CopilotPayloadCompletion
-from ..utils import clamp
-from ..utils import fix_completion_syntax_highlight
-from ..utils import get_copilot_view_setting
-from ..utils import get_view_language_id
-from ..utils import is_active_view
-from ..utils import set_copilot_view_setting
-from abc import ABC
-from abc import abstractmethod
-from more_itertools import first_true
-from typing import Sequence
 import html
+import textwrap
+from abc import ABC, abstractmethod
+from typing import Sequence
+
 import mdpopups
 import sublime
-import textwrap
+from more_itertools import first_true
+
+from ..template import load_resource_template
+from ..types import CopilotPayloadCompletion
+from ..utils import (
+    clamp,
+    fix_completion_syntax_highlight,
+    get_copilot_view_setting,
+    get_view_language_id,
+    is_active_view,
+    set_copilot_view_setting,
+)
 
 _view_to_phantom_set: dict[int, sublime.PhantomSet] = {}
 

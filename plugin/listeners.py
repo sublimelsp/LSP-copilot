@@ -1,27 +1,22 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
+from typing import Any, final
+
+import sublime
+import sublime_plugin
+from typing_extensions import override
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
+from watchdog.observers.api import ObservedWatch
+
 from .client import CopilotPlugin
 from .constants import PACKAGE_NAME
 from .decorators import must_be_active_view
 from .helpers import CopilotIgnore
-from .ui import ViewCompletionManager
-from .ui import ViewPanelCompletionManager
-from .ui import WindowConversationManager
-from .utils import all_windows
-from .utils import get_copilot_view_setting
-from .utils import get_session_setting
-from .utils import set_copilot_view_setting
-from collections.abc import Iterable
-from typing import Any
-from typing import final
-from typing_extensions import override
-from watchdog.events import FileSystemEvent
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
-from watchdog.observers.api import ObservedWatch
-import re
-import sublime
-import sublime_plugin
+from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager
+from .utils import all_windows, get_copilot_view_setting, get_session_setting, set_copilot_view_setting
 
 
 class ViewEventListener(sublime_plugin.ViewEventListener):

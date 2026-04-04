@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-from ..template import load_resource_template
-from ..types import CopilotPayloadPanelSolution
-from ..types import StLayout
-from ..utils import all_views
-from ..utils import find_view_by_id
-from ..utils import fix_completion_syntax_highlight
-from ..utils import get_copilot_view_setting
-from ..utils import get_view_language_id
-from ..utils import remove_prefix
-from ..utils import set_copilot_view_setting
+import textwrap
 from collections.abc import Iterable
-from more_itertools import first_true
-from more_itertools import unique_everseen
+
 import mdpopups
 import sublime
-import textwrap
+from more_itertools import first_true, unique_everseen
+
+from ..template import load_resource_template
+from ..types import CopilotPayloadPanelSolution, StLayout
+from ..utils import (
+    all_views,
+    find_view_by_id,
+    fix_completion_syntax_highlight,
+    get_copilot_view_setting,
+    get_view_language_id,
+    remove_prefix,
+    set_copilot_view_setting,
+)
 
 
 class ViewPanelCompletionManager:
