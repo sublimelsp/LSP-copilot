@@ -94,3 +94,4 @@ ignore = ["E203", "SIM102", "SIM108"]
 case-sensitive = true
 combine-as-imports = true
 order-by-type = false
+required-imports = ["from __future__ import annotations"]
