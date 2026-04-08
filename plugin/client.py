@@ -49,14 +49,7 @@ from .types import (
     T_Callable,
 )
 from .ui import ViewCompletionManager, ViewPanelCompletionManager, WindowConversationManager
-from .utils import (
-    all_views,
-    all_windows,
-    debounce,
-    find_view_by_id,
-    get_session_setting,
-    status_message,
-)
+from .utils import all_views, all_windows, debounce, find_view_by_id, get_session_setting, status_message
 from .version_manager import version_manager
 
 WindowId = int

@@ -14,7 +14,7 @@ import zipfile
 from collections.abc import Callable, Generator, Iterable
 from functools import wraps
 from pathlib import Path
-from typing import IO, Any, Mapping, Sequence, TypeVar, Union, cast
+from typing import Any, IO, Mapping, Sequence, TypeVar, Union, cast
 
 import sublime
 from LSP.plugin.core.sessions import Session

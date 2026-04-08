@@ -89,3 +89,9 @@ select = [
   "SIM",
 ]
 ignore = ["E203", "SIM102", "SIM108"]
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+combine-as-imports = true
+order-by-type = false
+required-imports = ["from __future__ import annotations"]
