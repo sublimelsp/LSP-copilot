@@ -7,4 +7,12 @@
             "default": "// Settings in here override those in \"LSP-copilot/LSP-copilot.sublime-settings\"\n\n{\n\t$0\n}\n",
         },
     },
+    {
+        "caption": "Copilot: Inline Completion with Prompt",
+        "command": "copilot_inline_completion_prompt",
+    },
+    {
+        "caption": "Copilot: Inline Completion",
+        "command": "copilot_inline_completion",
+    },
 ]

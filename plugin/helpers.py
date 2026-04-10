@@ -3,6 +3,8 @@ from __future__ import annotations
 import itertools
 import os
 import re
+import shlex
+import subprocess
 import threading
 import time
 from operator import itemgetter
@@ -14,7 +16,7 @@ import sublime
 from LSP.plugin.core.protocol import Position as LspPosition
 from LSP.plugin.core.url import view_to_uri
 from LSP.plugin.core.views import position_to_offset, range_to_region, region_to_range
-from more_itertools import duplicates_everseen, first_true
+from more_itertools import duplicates_everseen, first, first_true
 from wcmatch import glob
 
 from .constants import COPILOT_WINDOW_SETTINGS_PREFIX, PACKAGE_NAME
@@ -41,6 +43,12 @@ from .utils import (
     get_view_language_id,
     set_copilot_setting,
 )
+
+if os.name == "nt":
+    STARTUPINFO_DEFAULT = subprocess.STARTUPINFO()  # type: ignore
+    STARTUPINFO_DEFAULT.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore
+else:
+    STARTUPINFO_DEFAULT = None  # type: ignore
 
 
 class ActivityIndicator:
@@ -175,6 +183,17 @@ class CopilotIgnore:
 def st_point_to_lsp_position(point: int, view: sublime.View) -> LspPosition:
     row, col = view.rowcol_utf16(point)
     return {"line": row, "character": col}
+
+
+def prepare_code_review_request_doc(view: sublime.View):
+    selection = view.sel()[0]
+    return {
+        "text": view.substr(sublime.Region(0, view.size())),
+        "uri": view_to_uri(view),
+        "languageId": get_view_language_id(view),
+        "selection": region_to_range(view, selection),
+        "version": view.change_count(),
+    }
 
 
 def prepare_completion_request_doc(view: sublime.View) -> CopilotDocType | None:
@@ -314,3 +333,185 @@ def preprocess_panel_completions(view: sublime.View, completions: Sequence[Copil
 
 def is_debug_mode() -> bool:
     return bool(get_plugin_setting_dotted("settings.debug", False))
+
+
+class GitHelper:
+    """Helper class for Git operations used by Copilot commands."""
+
+    @staticmethod
+    def run_git_command(cmd: Sequence[str], cwd: str | None = None) -> str | None:
+        """Run a git command and return the output, or None if it fails."""
+        result = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            startupinfo=STARTUPINFO_DEFAULT,
+        )
+        try:
+            stdout, stderr = result.communicate(timeout=10)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        if result.returncode != 0:
+            log_error(f"Git command failed: {shlex.join(cmd)}; Error: {stderr.strip()}")
+            return None
+        return stdout.strip()
+
+    @staticmethod
+    def get_git_repo_root(start_path: str) -> str | None:
+        """Find the Git repository root starting from the given path."""
+        return GitHelper.run_git_command(["git", "rev-parse", "--show-toplevel"], start_path)
+
+    @staticmethod
+    def get_git_changes(repo_root: str) -> list[str]:
+        """Get actual diff content for staged and unstaged changes."""
+        changes: list[str] = []
+
+        # Get staged changes (actual diff content)
+        staged_output = GitHelper.run_git_command(["git", "diff", "--cached"], repo_root)
+        if staged_output:
+            changes.append(f"=== STAGED CHANGES ===\n{staged_output}")
+
+        # Get unstaged changes (actual diff content)
+        unstaged_output = GitHelper.run_git_command(["git", "diff"], repo_root)
+        if unstaged_output:
+            changes.append(f"=== UNSTAGED CHANGES ===\n{unstaged_output}")
+
+        # Get untracked files content (for small files)
+        untracked_output = GitHelper.run_git_command(["git", "ls-files", "--others", "--exclude-standard"], repo_root)
+        if untracked_output:
+            untracked_files = [f.strip() for f in untracked_output.split("\n") if f.strip()]
+            untracked_content: list[str] = []
+
+            for file_path in untracked_files[:5]:  # Limit to first 5 untracked files
+                full_path = Path(repo_root) / file_path
+                try:
+                    if full_path.is_file() and full_path.stat().st_size < 10000:  # Only read files < 10KB
+                        content = full_path.read_text(encoding="utf-8", errors="ignore")
+                        untracked_content.append(f"=== NEW FILE: {file_path} ===\n{content}")
+                except (OSError, UnicodeDecodeError):
+                    untracked_content.append(f"=== NEW FILE: {file_path} ===\n[Binary or unreadable file]")
+
+            if untracked_content:
+                changes.extend(untracked_content)
+
+        return changes
+
+    @staticmethod
+    def get_current_user_email(repo_root: str) -> str | None:
+        """Get the current Git user email."""
+        return GitHelper.run_git_command(["git", "config", "user.email"], repo_root)
+
+    @staticmethod
+    def get_user_commits(repo_root: str, user_email: str | None, limit: int = 10) -> list[str]:
+        """Get recent commits by the current user."""
+        if not user_email:
+            return []
+
+        cmd = ["git", "log", f"--author={user_email}", f"--max-count={limit}", "--oneline", "--no-merges"]
+
+        output = GitHelper.run_git_command(cmd, repo_root)
+        if output:
+            return [line.strip() for line in output.split("\n") if line.strip()]
+        return []
+
+    @staticmethod
+    def get_recent_commits(repo_root: str, limit: int = 20) -> list[str]:
+        """Get recent commits from all contributors."""
+        cmd = ["git", "log", f"--max-count={limit}", "--oneline", "--no-merges"]
+
+        output = GitHelper.run_git_command(cmd, repo_root)
+        if output:
+            return [line.strip() for line in output.split("\n") if line.strip()]
+        return []
+
+    @staticmethod
+    def get_workspace_folder(view: sublime.View) -> str | None:
+        """Get the workspace folder path."""
+        if not (window := view.window()):
+            return None
+
+        # Try to get the project path
+        if folders := window.folders():
+            return folders[0]
+
+        # Fallback to file directory
+        if file_name := view.file_name():
+            return str(Path(file_name).parent)
+
+        return None
+
+    @staticmethod
+    def get_user_language() -> str | None:
+        """Get user's language preference from Sublime Text settings."""
+        import locale
+
+        lang_default = "en_US"
+
+        lang = first(locale.getdefaultlocale()) or ""
+        if lang.upper() == "C":
+            return lang_default
+
+        return lang or lang_default
+
+    @classmethod
+    def gather_git_commit_data(cls, view: sublime.View) -> dict[str, Any] | None:
+        """
+        Gather all Git data needed for commit message generation.
+        Returns None if not in a Git repository or if workspace folder not found.
+        """
+        # Get workspace folder
+        workspace_folder = cls.get_workspace_folder(view)
+        if not workspace_folder:
+            return None
+
+        # Find Git repository root
+        repo_root = cls.get_git_repo_root(workspace_folder)
+        if not repo_root:
+            return None
+
+        # Gather Git information
+        changes = cls.get_git_changes(repo_root)
+        user_email = cls.get_current_user_email(repo_root)
+        user_commits = cls.get_user_commits(repo_root, user_email)
+        recent_commits = cls.get_recent_commits(repo_root)
+        user_language = cls.get_user_language()
+
+        return {
+            "changes": changes,
+            "userCommits": user_commits,
+            "recentCommits": recent_commits,
+            "workspaceFolder": workspace_folder,
+            "userLanguage": user_language,
+        }
+
+
+def prepare_conversation_edit_request(view: sublime.View) -> dict:
+    """Prepare document information for edit conversation request."""
+    if not (prepare_completion_request_doc(view)):
+        return {}
+
+    # Get the current selection
+    selection = view.sel()[0]
+    selection_start = selection.begin()
+    selection_end = selection.end()
+
+    # Get the line range for the selection
+    selection_line_start = view.line(selection_start).begin()
+    selection_line_end = view.line(selection_end).end()
+
+    # Convert positions to LSP format (line, character)
+    return {
+        "text": view.substr(sublime.Region(0, view.size())),
+        "languageId": get_view_language_id(view),
+        "selection": {
+            "start": st_point_to_lsp_position(selection_start, view),
+            "end": st_point_to_lsp_position(selection_end, view),
+        },
+        "range": {
+            "start": st_point_to_lsp_position(selection_line_start, view),
+            "end": st_point_to_lsp_position(selection_line_end, view),
+        },
+    }
