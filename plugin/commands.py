@@ -1804,7 +1804,7 @@ class CopilotEditConversationDestroyCommand(CopilotTextCommand):
         session.send_request(
             Request(
                 REQ_EDIT_CONVERSATION_DESTROY,
-                {
+                {  # type: ignore[arg-type]
                     "editConversationId": conversation_id,
                     "options": {},
                 },
