@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import sublime
 from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
-from lsp_utils import notification_handler, request_handler
+from LSP.plugin.api import notification_handler, request_handler
 from typing_extensions import override
 
 from .constants import (
