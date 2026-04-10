@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import sublime
 from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
 from LSP.plugin.api import notification_handler, request_handler
+from LSP.plugin.core.promise import Promise
 from typing_extensions import override
 
 from .constants import (
@@ -529,13 +530,9 @@ class CopilotPlugin(AbstractPlugin):
         self.update_status_bar_text()
 
     @request_handler(REQ_CONVERSATION_CONTEXT)
-    def _handle_conversation_context_request(
-        self,
-        payload: CopilotPayloadConversationContext,
-        respond: Callable[[Any], None],
-    ) -> None:
+    def _handle_conversation_context_request(self, payload: CopilotPayloadConversationContext) -> Promise[Any]:
         if not (session := self.weaksession()):
-            return
+            return Promise.resolve(None)
 
         skill_id = payload.get("skillId")
         if (
@@ -545,10 +542,9 @@ class CopilotPlugin(AbstractPlugin):
             and (view := find_view_by_id(wcm.last_active_view_id))
             and (doc := prepare_completion_request_doc(view))
         ):
-            respond(doc)
-            return
+            return Promise.resolve(doc)
 
-        respond(None)
+        return Promise.resolve(None)
 
     @_guard_view()
     @debounce()
