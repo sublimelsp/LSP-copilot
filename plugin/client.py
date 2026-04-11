@@ -11,9 +11,18 @@ from typing import Any, cast
 from urllib.parse import urlparse
 
 import sublime
-from LSP.plugin import AbstractPlugin, ClientConfig, DottedDict, Notification, Request, Session, WorkspaceFolder
-from LSP.plugin.api import notification_handler, request_handler
-from LSP.plugin.core.promise import Promise
+from LSP.plugin import (
+    AbstractPlugin,
+    ClientConfig,
+    DottedDict,
+    Notification,
+    Promise,
+    Request,
+    Session,
+    WorkspaceFolder,
+    notification_handler,
+    request_handler,
+)
 from typing_extensions import override
 
 from .constants import (
@@ -52,6 +61,7 @@ from .log import log_error, log_info, log_warning
 from .template import load_string_template
 from .types import (
     AccountStatus,
+    CopilotDocType,
     CopilotPayloadCompletions,
     CopilotPayloadConversationContext,
     CopilotPayloadConversationEntry,
@@ -530,13 +540,12 @@ class CopilotPlugin(AbstractPlugin):
         self.update_status_bar_text()
 
     @request_handler(REQ_CONVERSATION_CONTEXT)
-    def _handle_conversation_context_request(self, payload: CopilotPayloadConversationContext) -> Promise[Any]:
-        if not (session := self.weaksession()):
-            return Promise.resolve(None)
-
-        skill_id = payload.get("skillId")
+    def _handle_conversation_context_request(
+        self, payload: CopilotPayloadConversationContext
+    ) -> Promise[CopilotDocType | None]:
         if (
-            (skill_id == "current-editor")
+            (session := self.weaksession())
+            and (payload.get("skillId") == "current-editor")
             and (window := session.window)
             and (wcm := WindowConversationManager(window))
             and (view := find_view_by_id(wcm.last_active_view_id))
