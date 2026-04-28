@@ -5,7 +5,7 @@
             "charset-normalizer",
             "idna",
             "Jinja2",
-            "jmespath ",
+            "jmespath",
             "lsp_utils",
             "markupsafe",
             "more-itertools",
