@@ -12,7 +12,7 @@
             "requests",
             "sublime_lib",
             "urllib3",
-            "watchdog",
+            "watchfiles",
             "wcmatch"
         ]
     }

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import re
+import threading
 from collections.abc import Iterable
 from typing import Any, final
 
 import sublime
 import sublime_plugin
 from typing_extensions import override
-from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
-from watchdog.observers.api import ObservedWatch
+from watchfiles import Change, awatch
 
 from .client import CopilotPlugin
 from .constants import PACKAGE_NAME
@@ -155,78 +155,85 @@ class EventListener(sublime_plugin.EventListener):
 
         return None
 
-    def on_new_window(self, window: sublime.Window) -> None:
-        copilot_ignore_observer.add_folders(window.folders())
+    def on_load_project_async(self, window: sublime.Window) -> None:
+        copilot_file_watcher.add_folders(window.folders())
 
-    def on_pre_close_window(self, window: sublime.Window) -> None:
-        copilot_ignore_observer.remove_folders(window.folders())
+    def on_new_project_async(self, window: sublime.Window) -> None:
+        copilot_file_watcher.add_folders(window.folders())
 
+    def on_new_window_async(self, window: sublime.Window) -> None:
+        copilot_file_watcher.add_folders(window.folders())
 
-@final
-class CopilotIgnoreHandler(FileSystemEventHandler):
-    def __init__(self) -> None:
-        self.filename = ".copilotignore"
-
-    @override
-    def on_modified(self, event: FileSystemEvent) -> None:
-        if not event.is_directory and event.src_path.endswith(self.filename):
-            self.update_window_patterns(event.src_path)
-
-    @override
-    def on_created(self, event: FileSystemEvent) -> None:
-        if not event.is_directory and event.src_path.endswith(self.filename):
-            self.update_window_patterns(event.src_path)
-
-    def update_window_patterns(self, path: str) -> None:
-        for window in all_windows():
-            if not self._best_matched_folder(path, window.folders()):
-                continue
-            # Update patterns for specific window and folder
-            CopilotIgnore(window).load_patterns()
-            return
-
-    def _best_matched_folder(self, path: str, folders: list[str]) -> str | None:
-        matching_folder = None
-        for folder in folders:
-            if path.startswith(folder) and (matching_folder is None or len(folder) > len(matching_folder)):
-                matching_folder = folder
-        return matching_folder
+    def on_pre_close_window_async(self, window: sublime.Window) -> None:
+        copilot_file_watcher.remove_folders(window.folders())
 
 
 @final
-class CopilotIgnoreObserver:
+class CopilotFileWatcher:
     def __init__(self, folders: Iterable[str] | None = None) -> None:
-        self.observer = Observer()
-        self._event_handler = CopilotIgnoreHandler()
-        self._folders = list(folders or [])
-        self._scheduler: dict[str, ObservedWatch] = {}
+        self._folders = set(folders or [])
+        self._thread: threading.Thread | None = None
+        self._stop_event: asyncio.Event | None = None
 
     def setup(self) -> None:
-        self.add_folders(self._folders)
-        self.observer.start()
+        self._stop_event = asyncio.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
 
     def cleanup(self) -> None:
-        self.observer.stop()
-        self.observer.join()
+        if self._stop_event is not None:
+            self._stop_event.set()
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=5)
+        self._thread = None
+        self._stop_event = None
+
+    def _run(self) -> None:
+        asyncio.run(self._awatch_loop())
+
+    async def _awatch_loop(self) -> None:
+        async for changes in awatch(
+            *self._folders,
+            recursive=False,
+            stop_event=self._stop_event,
+            rust_timeout=1000,
+            yield_on_timeout=True,
+        ):
+            self._on_changes(changes)
+
+    def _on_changes(self, changes: set[tuple[Change, str]]) -> None:
+        for _change, path in changes:
+            print(f"[😀] Detected change in: {_change = } ; {path = }")
+            if not path.endswith(".copilotignore"):
+                continue
+            for window in all_windows():
+                if any(path.startswith(folder) for folder in window.folders()):
+                    sublime.set_timeout_async(lambda w=window: CopilotIgnore(w).load_patterns())
+                    return
 
     def add_folders(self, folders: Iterable[str]) -> None:
+        print(f"[😀 add_folders] Starting file watcher for folders: {self._folders}")
+        changed = False
         for folder in folders:
-            self.add_folder(folder)
-
-    def add_folder(self, folder: str) -> None:
-        if folder not in self._folders:
-            self._folders.append(folder)
-        observer = self.observer.schedule(self._event_handler, folder, recursive=False)
-        self._scheduler[folder] = observer
+            if folder not in self._folders:
+                self._folders.add(folder)
+                changed = True
+        if changed:
+            self._restart()
 
     def remove_folders(self, folders: list[str]) -> None:
+        print(f"[😀 remove_folders] Starting file watcher for folders: {self._folders}")
+        changed = False
         for folder in folders:
-            self.remove_folder(folder)
+            if folder in self._folders:
+                self._folders.remove(folder)
+                changed = True
+        if changed:
+            self._restart()
 
-    def remove_folder(self, folder: str) -> None:
-        if folder in self._folders:
-            self._folders.remove(folder)
-            self.observer.unschedule(self._scheduler[folder])
+    def _restart(self) -> None:
+        self.cleanup()
+        self.setup()
 
 
-copilot_ignore_observer = CopilotIgnoreObserver()
+copilot_file_watcher = CopilotFileWatcher()
