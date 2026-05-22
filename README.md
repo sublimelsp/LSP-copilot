@@ -1,5 +1,6 @@
 # LSP-copilot
 
+
 ![Copilot](https://raw.githubusercontent.com/TheSecEng/LSP-copilot/master/docs/screenshot.png)
 
 GitHub Copilot support for Sublime Text LSP plugin provided through [@github/copilot-language-server][].
