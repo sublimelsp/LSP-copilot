@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from LSP.plugin import register_plugin, unregister_plugin
-
 from .client import CopilotPlugin
 from .commands import (
     CopilotAcceptCompletionCommand,
@@ -117,12 +115,11 @@ __all__ = (
 
 def plugin_loaded() -> None:
     """Executed when this plugin is loaded."""
-    register_plugin(CopilotPlugin)
+    CopilotPlugin.register()
     copilot_ignore_observer.setup()
     for window in all_windows():
         CopilotIgnore(window).load_patterns()
 
-    version_manager.client_cls = CopilotPlugin
     version_manager.server_version = SERVER_VERSION
 
 
@@ -131,4 +128,4 @@ def plugin_unloaded() -> None:
     CopilotPlugin.cleanup()
     CopilotIgnore.cleanup()
     copilot_ignore_observer.cleanup()
-    unregister_plugin(CopilotPlugin)
+    CopilotPlugin.unregister()

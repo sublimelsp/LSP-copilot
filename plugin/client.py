@@ -12,14 +12,13 @@ from urllib.parse import urlparse
 
 import sublime
 from LSP.plugin import (
-    AbstractPlugin,
-    ClientConfig,
-    DottedDict,
-    Notification,
+    IsApplicableContext,
+    LspPlugin,
+    OnPreStartContext,
     Promise,
     Request,
+    ServerNotification,
     Session,
-    WorkspaceFolder,
     notification_handler,
     request_handler,
 )
@@ -124,7 +123,7 @@ def _guard_view(*, failed_return: Any = None) -> Callable[[T_Callable], T_Callab
     return decorator
 
 
-class CopilotPlugin(AbstractPlugin):
+class CopilotPlugin(LspPlugin):
     window_attrs: weakref.WeakKeyDictionary[sublime.Window, WindowAttr] = weakref.WeakKeyDictionary()
     """Per-window attributes. I.e., per-session attributes."""
 
@@ -142,7 +141,7 @@ class CopilotPlugin(AbstractPlugin):
         super().__init__(session)
 
         if sess := session():
-            self.window_attrs[sess.window].client = self
+            self.window_attrs[sess.window] = WindowAttr(client=self)
 
         self._activity_indicator = ActivityIndicator(self.update_status_bar_text)
         self._server_status_message = ""
@@ -161,65 +160,21 @@ class CopilotPlugin(AbstractPlugin):
 
     @override
     @classmethod
-    def name(cls) -> str:
-        return PACKAGE_NAME
-
-    @override
-    @classmethod
-    def configuration(cls) -> tuple[sublime.Settings, str]:
-        basename = f"{cls.name()}.sublime-settings"
-        filepath = f"Packages/{cls.name()}/{basename}"
-        return sublime.load_settings(basename), filepath
-
-    @override
-    @classmethod
-    def additional_variables(cls) -> dict[str, str] | None:
-        return {
-            "server_path": str(version_manager.server_path),
-        }
-
-    @override
-    @classmethod
-    def needs_update_or_installation(cls) -> bool:
-        return not version_manager.is_installed
-
-    @override
-    @classmethod
-    def install_or_update(cls) -> None:
-        version_manager.install_server()
-
-    @override
-    @classmethod
-    def is_applicable(cls, view: sublime.View, config: ClientConfig) -> bool:
+    def is_applicable_async(cls, context: IsApplicableContext) -> bool:
         return bool(
-            super().is_applicable(view, config)
-            and not ((window := view.window()) and CopilotIgnore(window).trigger(view))
+            super().is_applicable_async(context)
+            and not ((window := context.view.window()) and CopilotIgnore(window).trigger(context.view))
         )
 
     @override
     @classmethod
-    def can_start(
-        cls,
-        window: sublime.Window,
-        initiating_view: sublime.View,
-        workspace_folders: list[WorkspaceFolder],
-        configuration: ClientConfig,
-    ) -> str | None:
-        if message := super().can_start(window, initiating_view, workspace_folders, configuration):
-            return message
+    def on_pre_start_async(cls, context: OnPreStartContext) -> None:
+        if not version_manager.is_installed:
+            version_manager.install_server()
 
-        cls.window_attrs.setdefault(window, WindowAttr())
-        return None
+        if window := context.view.window():
+            cls.window_attrs.setdefault(window, WindowAttr())
 
-    @override
-    @classmethod
-    def on_pre_start(
-        cls,
-        window: sublime.Window,
-        initiating_view: sublime.View,
-        workspace_folders: list[WorkspaceFolder],
-        configuration: ClientConfig,
-    ) -> str | None:
         def parse_proxy(proxy: str) -> NetworkProxy | None:
             # in the form of "username:password@host:port" or "host:port"
             if not proxy:
@@ -243,16 +198,14 @@ class CopilotPlugin(AbstractPlugin):
                 "version": cls.get_version(),
             },
         }
-        if network_proxy := parse_proxy(configuration.settings.get("proxy") or ""):
+        if network_proxy := parse_proxy(context.configuration.settings.get("proxy") or ""):
             editor_info["networkProxy"] = network_proxy
 
-        configuration.init_options.update(editor_info)
-        return None
+        context.configuration.init_options.update(editor_info)
+        context.variables["server_path"] = str(version_manager.server_path)
 
-    @override
-    def on_settings_changed(self, settings: DottedDict) -> None:
-        super().on_settings_changed(settings)
-
+    def on_initialized_async(self) -> None:
+        """Called once after the `initialized` notification, replaces on_settings_changed."""
         self.update_status_bar_text()
 
         if not (session := self.weaksession()):
@@ -354,18 +307,20 @@ class CopilotPlugin(AbstractPlugin):
                 log_warning(f'Invalid "status_text" template: {e}')
         session.set_config_status_async(rendered_text)
 
-    def on_server_notification_async(self, notification: Notification) -> None:
-        if notification.method == "$/progress":
-            token = notification.params.get("token", "")
-            params = notification.params.get("value")
+    def on_server_notification_async(self, notification: ServerNotification) -> None:
+        if notification["method"] == "$/progress":
+            token = notification["params"].get("token", "")
+            params = notification["params"].get("value")
 
             if not params:
                 return
 
+            assert isinstance(token, str)
+
             if token.startswith("copilot_chat://"):
                 self._handle_chat_progress(token, params)
             elif token.startswith("copilot_pedit://"):
-                self._handle_edit_progress(token, params)
+                self._handle_edit_progress(token, params)  # type: ignore
 
     def _handle_chat_progress(self, token: str, params: Any) -> None:
         """Handle progress notifications for chat conversations."""
