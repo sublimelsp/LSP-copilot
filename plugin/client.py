@@ -201,7 +201,7 @@ class CopilotPlugin(LspPlugin):
         if network_proxy := parse_proxy(context.configuration.settings.get("proxy") or ""):
             editor_info["networkProxy"] = network_proxy
 
-        context.configuration.init_options.update(editor_info)
+        context.configuration.initialization_options.update(editor_info)
         context.variables["server_path"] = str(version_manager.server_path)
 
     @override
