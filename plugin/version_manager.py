@@ -39,6 +39,7 @@ class VersionManager:
     """The relative path of the server executable in the tarball for the current platform architecture."""
 
     def __init__(self) -> None:
+        self.plugin_storage_dir: Path
         self.server_version = ""
 
     @property
@@ -48,11 +49,6 @@ class VersionManager:
             tarball_name=self.THIS_TARBALL_NAME.format(version=self.server_version),
             version=self.server_version,
         )
-
-    @property
-    def plugin_storage_dir(self) -> Path:
-        """The storage directory for this plugin."""
-        return Path(ST_STORAGE_PATH) / PACKAGE_NAME
 
     @property
     def versioned_server_dir(self) -> Path:

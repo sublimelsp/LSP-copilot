@@ -120,6 +120,7 @@ def plugin_loaded() -> None:
     for window in all_windows():
         CopilotIgnore(window).load_patterns()
 
+    version_manager.plugin_storage_dir = CopilotPlugin.plugin_storage_path
     version_manager.server_version = SERVER_VERSION
 
 
