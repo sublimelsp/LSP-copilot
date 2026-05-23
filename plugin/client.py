@@ -307,6 +307,7 @@ class CopilotPlugin(LspPlugin):
                 log_warning(f'Invalid "status_text" template: {e}')
         session.set_config_status_async(rendered_text)
 
+    @override
     def on_server_notification_async(self, notification: ServerNotification) -> None:
         if notification["method"] == "$/progress":
             token = notification["params"].get("token", "")
