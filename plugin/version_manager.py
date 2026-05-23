@@ -3,9 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from LSP.plugin import ST_STORAGE_PATH
-
-from .constants import PACKAGE_NAME, PLATFORM_ARCH
+from .constants import PLATFORM_ARCH
 from .log import log_info
 from .utils import decompress_buffer, rmtree_ex, simple_urlopen
 

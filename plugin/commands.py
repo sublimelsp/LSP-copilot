@@ -35,7 +35,6 @@ from lsp_utils.helpers import rmtree_ex
 from .client import CopilotPlugin
 from .constants import (
     COPILOT_OUTPUT_PANEL_PREFIX,
-    PACKAGE_NAME,
     REQ_CHECK_STATUS,
     REQ_CONVERSATION_AGENTS,
     REQ_CONVERSATION_CREATE,
