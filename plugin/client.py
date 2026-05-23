@@ -206,7 +206,6 @@ class CopilotPlugin(LspPlugin):
 
     @override
     def on_initialized_async(self) -> None:
-        """Called once after the `initialized` notification, replaces on_settings_changed."""
         self.update_status_bar_text()
 
         if not (session := self.weaksession()):
