@@ -153,7 +153,6 @@ class CopilotPrepareAndEditSettingsCommand(sublime_plugin.ApplicationCommand):
 
 
 class BaseCopilotCommand(ABC):
-    session_name = PACKAGE_NAME
     requirement = REQUIRE_SIGN_IN | REQUIRE_AUTHORIZED
 
     def _can_meet_requirement(self, session: Session) -> bool:
