@@ -305,6 +305,7 @@ class CopilotUserDefinedPromptTemplates(TypedDict, total=True):
 
 
 class CopilotModel(TypedDict, total=True):
+    id: str
     modelFamily: str
     modelName: str
     scopes: list[str]

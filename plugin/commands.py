@@ -1025,8 +1025,8 @@ class CopilotModelsCommand(CopilotTextCommand):
     def _set_model_policy(self, index: int, models: list[CopilotModel]) -> None:
         if index == -1:
             return
-        model_name = models[index]["modelFamily"]
-        self.view.run_command("copilot_set_model_policy", {"model": model_name, "status": "enabled"})
+        model_id = models[index]["id"]
+        self.view.run_command("copilot_set_model_policy", {"model": model_id, "status": "enabled"})
 
 
 class CopilotCodeReviewCommand(CopilotTextCommand):
