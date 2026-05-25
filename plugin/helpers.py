@@ -103,7 +103,14 @@ class GithubInfo:
             cls.clear_avatar()
             return
 
-        if (req := requests.get(f"https://github.com/{username}.png?size={size}")).ok:
+        try:
+            req = requests.get(f"https://github.com/{username}.png?size={size}")
+        except requests.exceptions.RequestException as e:
+            log_error(f'Failed to fetch avatar for "{username}": {e}.')
+            cls.clear_avatar()
+            return
+
+        if req.ok:
             data = req.content
         # see https://github.com/TerminalFi/LSP-copilot/issues/218#issuecomment-2535522265
         elif req.status_code == 404:
