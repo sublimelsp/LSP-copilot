@@ -3,9 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from LSP.plugin import AbstractPlugin
-
-from .constants import PACKAGE_NAME, PLATFORM_ARCH
+from .constants import PLATFORM_ARCH
 from .log import log_info
 from .utils import decompress_buffer, rmtree_ex, simple_urlopen
 
@@ -39,7 +37,7 @@ class VersionManager:
     """The relative path of the server executable in the tarball for the current platform architecture."""
 
     def __init__(self) -> None:
-        self.client_cls: type[AbstractPlugin] | None = None
+        self.plugin_storage_dir: Path
         self.server_version = ""
 
     @property
@@ -49,12 +47,6 @@ class VersionManager:
             tarball_name=self.THIS_TARBALL_NAME.format(version=self.server_version),
             version=self.server_version,
         )
-
-    @property
-    def plugin_storage_dir(self) -> Path:
-        """The storage directory for this plugin."""
-        assert self.client_cls, "VersionManager.client_cls must be set to a subclass of Abstract"
-        return Path(self.client_cls.storage_path()) / PACKAGE_NAME
 
     @property
     def versioned_server_dir(self) -> Path:
