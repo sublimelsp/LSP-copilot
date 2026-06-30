@@ -181,6 +181,8 @@ class BaseConversationEntry(ABC):
         """Update the conversation sheet content."""
         if not (sheet := self.window.transient_sheet_in_group(self.manager.group_id)):
             return
+        if not isinstance(sheet, sublime.HtmlSheet):
+            return
 
         mdpopups.update_html_sheet(sheet=sheet, contents=self.completion_content, md=True, wrapper_class="wrapper")
 
