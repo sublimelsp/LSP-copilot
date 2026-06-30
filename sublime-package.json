@@ -60,7 +60,7 @@
                       "type": "object",
                       "markdownDescription": "The configuration for Github Enterprise.",
                       "properties": {
-                        "url": {
+                        "uri": {
                           "default": "",
                           "description": "The URL of the GitHub Enterprise instance.",
                           "type": "string"
