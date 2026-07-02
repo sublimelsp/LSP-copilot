@@ -181,6 +181,8 @@ class BaseConversationEntry(ABC):
         """Update the conversation sheet content."""
         if not (sheet := self.window.transient_sheet_in_group(self.manager.group_id)):
             return
+        if not isinstance(sheet, sublime.HtmlSheet):
+            return
 
         mdpopups.update_html_sheet(sheet=sheet, contents=self.completion_content, md=True, wrapper_class="wrapper")
 
@@ -194,7 +196,7 @@ class BaseConversationEntry(ABC):
         self.manager.is_visible = False
         self.manager.window.run_command("hide_panel")
         if self.manager.original_layout:
-            self.window.set_layout(self.manager.original_layout)
+            self.window.set_layout(self.manager.original_layout)  # pyright: ignore[reportArgumentType]
             self.manager.original_layout = None
 
         if view := self.window.active_view():
@@ -217,7 +219,7 @@ class BaseConversationEntry(ABC):
 
     def _open_in_side_by_side(self, window: sublime.Window) -> None:
         """Open the conversation sheet in side-by-side layout."""
-        self.manager.original_layout = window.layout()
+        self.manager.original_layout = window.layout()  # pyright: ignore[reportAttributeAccessIssue]
         window.set_layout({
             "cols": [0.0, 0.5, 1.0],
             "rows": [0.0, 1.0],
