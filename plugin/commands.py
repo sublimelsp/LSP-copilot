@@ -480,33 +480,6 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
 
         return list_items
 
-    def _detect_language(self, text: str) -> str:
-        """Simple language detection based on content."""
-        text_lower = text.lower().strip()
-
-        # Python
-        if any(keyword in text_lower for keyword in ["def ", "import ", "from ", "class ", "if __name__"]):
-            return "python"
-
-        # JavaScript/TypeScript
-        if any(keyword in text_lower for keyword in ["function ", "const ", "let ", "var ", "=>", "console.log"]):
-            return "javascript"
-
-        # HTML
-        if text_lower.startswith("<") and ">" in text_lower:
-            return "html"
-
-        # CSS
-        if "{" in text and "}" in text and ":" in text:
-            return "css"
-
-        # JSON
-        if text.strip().startswith("{") and text.strip().endswith("}"):
-            return "json"
-
-        # Default to text
-        return "text"
-
 
 class CopilotAcceptPanelCompletionShimCommand(CopilotWindowCommand):
     def run(self, view_id: int, completion_index: int) -> None:
