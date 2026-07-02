@@ -115,13 +115,13 @@ __all__ = (
 
 def plugin_loaded() -> None:
     """Executed when this plugin is loaded."""
+    version_manager.plugin_storage_dir = CopilotPlugin.plugin_storage_path
+    version_manager.server_version = SERVER_VERSION
+
     CopilotPlugin.register()
     copilot_ignore_observer.setup()
     for window in all_windows():
         CopilotIgnore(window).load_patterns()
-
-    version_manager.plugin_storage_dir = CopilotPlugin.plugin_storage_path
-    version_manager.server_version = SERVER_VERSION
 
 
 def plugin_unloaded() -> None:
