@@ -23,7 +23,6 @@ from functools import partial, wraps
 from pathlib import Path
 from typing import Any, Literal, Sequence, cast
 
-import mdpopups
 import sublime
 import sublime_plugin
 from LSP.plugin import Request, Session
@@ -451,19 +450,8 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
         for i, item in enumerate(self.items):
             insert_text = item.get("insertText", "")
 
-            # Create preview using mdpopups to convert markdown to HTML
             if insert_text:
-                # Detect language for syntax highlighting
-                # This is a simple heuristic - you might want to improve this
-                language = self._detect_language(insert_text)
-                markdown_text = f"```{language}\n{insert_text}\n```"
-
-                # Convert markdown to HTML using mdpopups
-                try:
-                    html_details = mdpopups.md2html(None, markdown_text)
-                except Exception:
-                    # Fallback to plain text if markdown conversion fails
-                    html_details = f"<pre>{insert_text}</pre>"
+                html_details = f"<pre>{insert_text}</pre>"
 
                 # Create a short preview for the main text
                 preview = insert_text.strip().split("\n")[0]
@@ -491,33 +479,6 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
                 )
 
         return list_items
-
-    def _detect_language(self, text: str) -> str:
-        """Simple language detection based on content."""
-        text_lower = text.lower().strip()
-
-        # Python
-        if any(keyword in text_lower for keyword in ["def ", "import ", "from ", "class ", "if __name__"]):
-            return "python"
-
-        # JavaScript/TypeScript
-        if any(keyword in text_lower for keyword in ["function ", "const ", "let ", "var ", "=>", "console.log"]):
-            return "javascript"
-
-        # HTML
-        if text_lower.startswith("<") and ">" in text_lower:
-            return "html"
-
-        # CSS
-        if "{" in text and "}" in text and ":" in text:
-            return "css"
-
-        # JSON
-        if text.strip().startswith("{") and text.strip().endswith("}"):
-            return "json"
-
-        # Default to text
-        return "text"
 
 
 class CopilotAcceptPanelCompletionShimCommand(CopilotWindowCommand):
