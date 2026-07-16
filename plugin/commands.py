@@ -569,6 +569,54 @@ class CopilotConversationChatCommand(CopilotTextCommand):
         payload: CopilotPayloadConversationPreconditions,
         initial_message: str,
     ) -> None:
+        if not self.view.window():
+            return
+
+        session.send_request(
+            Request(REQ_COPILOT_MODELS, {}),
+            lambda models: self._on_result_copilot_models_for_create(plugin, session, models, initial_message),
+        )
+
+    def _on_result_copilot_models_for_create(
+        self,
+        plugin: CopilotPlugin,
+        session: Session,
+        models: list[CopilotModel],
+        initial_message: str,
+    ) -> None:
+        if not (window := self.view.window()):
+            return
+
+        chat_models = [model for model in models if "chat-panel" in model["scopes"]]
+        if not chat_models:
+            status_message("No chat models available", icon="❌")
+            return
+
+        default_index = next((i for i, model in enumerate(chat_models) if model["isChatDefault"]), 0)
+        window.show_quick_panel(
+            [
+                sublime.QuickPanelItem(
+                    trigger=model["modelName"],
+                    details=model["modelFamily"],
+                    annotation="Default" if model["isChatDefault"] else "",
+                )
+                for model in chat_models
+            ],
+            lambda index: self._on_result_model_selected(plugin, session, chat_models, index, initial_message),
+            selected_index=default_index,
+            placeholder="Select a model for this conversation",
+        )
+
+    def _on_result_model_selected(
+        self,
+        plugin: CopilotPlugin,
+        session: Session,
+        models: list[CopilotModel],
+        index: int,
+        initial_message: str,
+    ) -> None:
+        if index == -1:
+            return
         if not (window := self.view.window()):
             return
 
@@ -589,6 +637,7 @@ class CopilotConversationChatCommand(CopilotTextCommand):
                 "hideText": False,
                 "warnings": [],
             })
+        wcm.model_id = models[index]["id"]
         req_params: dict[str, Any] = {
             "turns": [{"request": msg}],
             "capabilities": {
@@ -598,6 +647,7 @@ class CopilotConversationChatCommand(CopilotTextCommand):
             "workDoneToken": f"copilot_chat://{window.id()}",
             "computeSuggestions": True,
             "source": "panel",
+            "modelInfo": {"id": wcm.model_id},
         }
         session.send_request(
             Request(REQ_CONVERSATION_CREATE, req_params),
@@ -634,7 +684,11 @@ class CopilotConversationChatCommand(CopilotTextCommand):
         user_prompts: list[CopilotUserDefinedPromptTemplates] = session.config.settings.get("prompts") or []
         is_template, msg = preprocess_chat_message(view, msg, user_prompts)
         views = [sv.view for sv in session.session_views_async() if sv.view.id() != view.id()]
-        if not (request := prepare_conversation_turn_request(wcm.conversation_id, wcm.window.id(), msg, view, views)):
+        if not (
+            request := prepare_conversation_turn_request(
+                wcm.conversation_id, wcm.window.id(), msg, view, views, wcm.model_id
+            )
+        ):
             return
 
         wcm.append_conversation_entry({

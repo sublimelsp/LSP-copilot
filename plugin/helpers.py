@@ -228,6 +228,7 @@ def prepare_conversation_turn_request(
     message: str,
     view: sublime.View,
     views: list[sublime.View],
+    model_id: str,
     source: Literal["panel", "inline"] = "panel",
 ) -> CopilotRequestConversationTurn | None:
     if not (doc := prepare_completion_request_doc(view)):
@@ -260,6 +261,7 @@ def prepare_conversation_turn_request(
         "computeSuggestions": True,
         "references": references,
         "source": source,
+        "modelInfo": {"id": model_id},
     }
 
 
