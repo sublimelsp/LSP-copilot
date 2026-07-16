@@ -244,6 +244,14 @@ class WindowConversationManager(BaseConversationManager):
         self._set_setting("last_active_view_id", value)
 
     @property
+    def model_id(self) -> str:
+        return self._get_setting("model_id", "")
+
+    @model_id.setter
+    def model_id(self, value: str) -> None:
+        self._set_setting("model_id", value)
+
+    @property
     def suggested_title(self) -> str:
         return self._get_setting("suggested_title", "")
 
@@ -289,6 +297,7 @@ class WindowConversationManager(BaseConversationManager):
         """Reset all chat conversation settings."""
         self.reset_base_settings()
         self.last_active_view_id = -1
+        self.model_id = ""
         self.suggested_title = ""
         self.follow_up = ""
         self.code_block_index = {}

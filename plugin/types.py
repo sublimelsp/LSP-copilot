@@ -220,6 +220,10 @@ class CopilotPayloadConversationTemplate(TypedDict, total=True):
     scopes: list[str]
 
 
+class CopilotModelInfo(TypedDict, total=True):
+    id: str
+
+
 class CopilotRequestConversationTurn(TypedDict, total=True):
     conversationId: str
     message: str
@@ -228,6 +232,7 @@ class CopilotRequestConversationTurn(TypedDict, total=True):
     computeSuggestions: bool
     references: list[CopilotRequestConversationTurnReference | CopilotGitHubWebSearch]
     source: Literal["panel", "inline"]
+    modelInfo: CopilotModelInfo
 
 
 class CopilotRequestConversationTurnReference(TypedDict, total=True):
@@ -309,6 +314,7 @@ class CopilotModel(TypedDict, total=True):
     modelFamily: str
     modelName: str
     scopes: list[str]
+    isChatDefault: bool
 
 
 # --------------------------- #
