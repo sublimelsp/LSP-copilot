@@ -1025,6 +1025,10 @@ class CopilotModelsCommand(CopilotTextCommand):
 
     def _on_result_copilot_models(self, payload: list[CopilotModel]) -> None:
         window = self.view.window() or sublime.active_window()
+        models = [item for item in payload if "modelPolicy" in item]
+        if not models:
+            status_message("No policy-configurable models available", icon="❌")
+            return
         window.show_quick_panel(
             [
                 sublime.QuickPanelItem(
@@ -1032,9 +1036,9 @@ class CopilotModelsCommand(CopilotTextCommand):
                     details=item["modelName"],
                     annotation=", ".join(item["scopes"]),
                 )
-                for item in payload
+                for item in models
             ],
-            lambda index: self._set_model_policy(index, payload),
+            lambda index: self._set_model_policy(index, models),
         )
 
     def _set_model_policy(self, index: int, models: list[CopilotModel]) -> None:
