@@ -5,6 +5,7 @@ from typing import Any, Callable, Literal, Tuple, TypeVar, TypedDict
 
 from LSP.plugin.core.protocol import Position as LspPosition, Range as LspRange
 from LSP.plugin.core.typing import StrEnum
+from typing_extensions import NotRequired
 
 T_Callable = TypeVar("T_Callable", bound=Callable[..., Any])
 
@@ -309,12 +310,20 @@ class CopilotUserDefinedPromptTemplates(TypedDict, total=True):
     scopes: list[str]
 
 
+class CopilotModelPolicy(TypedDict, total=True):
+    state: str
+    terms: str
+
+
 class CopilotModel(TypedDict, total=True):
     id: str
     modelFamily: str
     modelName: str
     scopes: list[str]
     isChatDefault: bool
+    modelPolicy: NotRequired[CopilotModelPolicy]
+    """Absent for models that aren't policy-gated (e.g. "auto" or completion-only models);
+    `copilot/setModelPolicy` fails for those."""
 
 
 # --------------------------- #
