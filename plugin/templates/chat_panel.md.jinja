@@ -64,10 +64,11 @@
 
 
 {% set code_block_replacements = [] %}
+{# the marker below must be kept in sync with `CODE_BLOCK_COMMANDS_MARKER` in `plugin/ui/chat.py` #}
 {% for index in section.code_block_indices %}
   {% do code_block_replacements.append(
     (
-      "CODE_BLOCK_COMMANDS_" ~ index|string,
+      "CODE_BLOCK_COMMANDS_" ~ index|string ~ "_END",
       (
         "<div class='code-actions'>" ~
         "<a class='icon-link' href='" ~ command_url('copilot_conversation_copy_code', {"window_id": window_id, "code_block_index": index}) ~ "'>" ~

@@ -904,9 +904,11 @@ class CopilotConversationCopyCodeCommand(CopilotWindowCommand):
 
         wcm = WindowConversationManager(window)
         if not (code := wcm.code_block_index.get(str(code_block_index), None)):
+            status_message(f"Failed to find code based on index. {code_block_index}")
             return
 
         sublime.set_clipboard(code)
+        status_message("Code block copied.", icon="✔")
 
 
 class CopilotConversationInsertCodeShimCommand(CopilotWindowCommand):

@@ -19,6 +19,13 @@ COPILOT_VIEW_SETTINGS_PREFIX = "copilot.completion"
 COPILOT_WINDOW_SETTINGS_PREFIX = "copilot"
 COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX = "copilot.conversation"
 
+# ---- #
+# Chat #
+# ---- #
+
+CONVERSATION_UPDATE_DEBOUNCE_MS = 100
+"""Rendering the chat sheet re-converts the whole conversation, so coalesce streaming updates."""
+
 # ---------------- #
 # Copilot requests #
 # ---------------- #
