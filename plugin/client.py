@@ -341,8 +341,19 @@ class CopilotPlugin(LspPlugin):
             needs_update = True
 
         if edit_agent_rounds := params.get("editAgentRounds", []):
-            params.setdefault("reply", edit_agent_rounds[-1].get("reply", ""))
-            wcm.append_conversation_entry(params)
+            # Only keep what the UI consumes. `params` also carries the whole agent round (with its
+            # accumulated tool calls), and storing that per streamed chunk bloats the window settings
+            # which are marshalled back and forth on every read and write.
+            wcm.append_or_merge_conversation_entry({
+                "kind": params.get("kind", "report"),
+                "conversationId": params.get("conversationId", ""),
+                "turnId": params.get("turnId", ""),
+                "reply": params.get("reply") or edit_agent_rounds[-1].get("reply", ""),
+                "annotations": params.get("annotations") or [],
+                "references": params.get("references") or [],
+                "hideText": params.get("hideText", False),
+                "warnings": params.get("warnings") or [],
+            })
             needs_update = True
 
         if followup := params.get("followUp"):
