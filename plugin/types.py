@@ -208,7 +208,6 @@ class CopilotPayloadConversationEntryTransformed(TypedDict, total=True):
     kind: str
     turnId: str
     messages: list[str]
-    codeBlocks: list[str]
     codeBlockIndices: list[int]
     references: list[CopilotRequestConversationTurnReference | CopilotGitHubWebSearch]
     warnings: list[Any]
