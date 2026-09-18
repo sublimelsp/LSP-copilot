@@ -1,18 +1,86 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Callable, TypeVar, cast
 
 import mdpopups
 import sublime
 
-from ..constants import COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX
+from ..constants import CONVERSATION_UPDATE_DEBOUNCE_MS, COPILOT_WINDOW_CONVERSATION_SETTINGS_PREFIX
 from ..helpers import GithubInfo, preprocess_message_for_html
 from ..template import load_resource_template
 from ..types import CopilotPayloadConversationEntry, CopilotPayloadConversationEntryTransformed, StLayout
 from ..utils import find_view_by_id, get_copilot_setting, set_copilot_setting
 
 T = TypeVar("T", bound="BaseConversationEntry")
+
+CODE_BLOCK_COMMANDS_MARKER = "CODE_BLOCK_COMMANDS_{index}_END"
+"""Placeholder replaced with the code block action buttons. Keep in sync with `chat_panel.md.jinja`."""
+
+_CODE_FENCE_PATTERN = re.compile(r"^[ \t]*(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+
+_PENDING_UPDATES: set[int] = set()
+"""IDs of windows which already have a debounced chat sheet update scheduled."""
+
+
+def inject_code_block_commands(message: str, last_index: int) -> tuple[str, list[int], dict[str, str], int]:
+    """
+    Insert a `CODE_BLOCK_COMMANDS_*` marker before every fenced code block in `message`.
+
+    The scan is line-based on purpose. The server streams a turn as chunks which are flushed
+    whenever a token happens to contain a newline, so a chunk regularly starts mid-line and
+    testing `chunk.startswith("```")` mistakes prose for code and vice versa.
+    See: https://github.com/sublimelsp/LSP-copilot/issues/309
+
+    :param      message:     The assembled message of a whole turn.
+    :param      last_index:  The index of the last code block seen in previous turns.
+
+    :returns:   `(message with markers, code block indices, index -> code block, new last index)`
+    """
+    lines: list[str] = []
+    indices: list[int] = []
+    code_blocks: dict[str, str] = {}
+    fence = ""
+    body: list[str] = []
+    index = last_index
+
+    for line in message.split("\n"):
+        matched = _CODE_FENCE_PATTERN.match(line)
+        if not fence:
+            # a backtick info string may not contain a backtick, otherwise it's inline code
+            if matched and not (matched["fence"][0] == "`" and "`" in matched["info"]):
+                fence = matched["fence"]
+                index += 1
+                indices.append(index)
+                lines.extend((CODE_BLOCK_COMMANDS_MARKER.format(index=index), ""))
+            lines.append(line)
+        elif _is_closing_fence(matched, fence):
+            code_blocks[str(index)] = "\n".join(body)
+            fence, body = "", []
+            lines.append(line)
+        else:
+            body.append(line)
+            lines.append(line)
+
+    if fence:
+        # The turn is still streaming, or was cancelled, inside a code block. Close it so that
+        # the Markdown renderer doesn't swallow the rest of the conversation, and still expose
+        # what we have so far to the copy/insert buttons.
+        # Fixes: https://github.com/TerminalFi/LSP-copilot/issues/187
+        code_blocks[str(index)] = "\n".join(body)
+        lines.append(fence)
+
+    return "\n".join(lines), indices, code_blocks, index
+
+
+def _is_closing_fence(matched: re.Match[str] | None, fence: str) -> bool:
+    return bool(
+        matched
+        and matched["fence"][0] == fence[0]
+        and len(matched["fence"]) >= len(fence)
+        and not matched["info"].strip()
+    )
 
 
 class ConversationSettingsManager:
@@ -309,16 +377,36 @@ class WindowConversationManager(BaseConversationManager):
             self._ui_entry = _ConversationEntry(self.window, self)
         return cast(_ConversationEntry, self._ui_entry)
 
+    def update(self) -> None:
+        """Update the conversation UI, coalescing the rapid updates of a streaming reply."""
+        window_id = self.window.id()
+        if window_id in _PENDING_UPDATES:
+            return
+        _PENDING_UPDATES.add(window_id)
+        sublime.set_timeout(self._flush_update, CONVERSATION_UPDATE_DEBOUNCE_MS)
+
+    def _flush_update(self) -> None:
+        _PENDING_UPDATES.discard(self.window.id())
+        if self.is_visible:
+            self.get_ui_entry().update()
+
     # Chat-specific methods
+    def append_or_merge_conversation_entry(self, entry: CopilotPayloadConversationEntry) -> None:
+        """Add a new conversation entry, merging it into the last one if it continues the same turn."""
+        entries = self.conversation_entries
+        if entries and (last := entries[-1])["kind"] == entry["kind"] and last["turnId"] == entry["turnId"]:
+            last["reply"] += entry["reply"]
+            last["references"].extend(entry["references"])
+            last["annotations"].extend(entry["annotations"])
+            last["warnings"].extend(entry["warnings"])
+        else:
+            entries.append(entry)
+        self.conversation_entries = entries
+
     def append_reference_block_state(self, turn_id: str, state: bool) -> None:
         reference_block_state = self.reference_block_state
         reference_block_state[turn_id] = state
         self.reference_block_state = reference_block_state
-
-    def insert_code_block_index(self, index: int, code_block: str) -> None:
-        code_block_index = self.code_block_index
-        code_block_index[str(index)] = code_block
-        self.code_block_index = code_block_index
 
     def toggle_references_block(self, turn_id: str) -> None:
         reference_block_state = self.reference_block_state
@@ -470,61 +558,44 @@ class _ConversationEntry(BaseConversationEntry):
         )
 
     def _synthesize(self) -> list[CopilotPayloadConversationEntryTransformed]:
-        def inject_code_block_commands(reply: str, code_block_index: int) -> str:
-            return f"CODE_BLOCK_COMMANDS_{code_block_index}\n\n{reply}"
-
         transformed_conversation: list[CopilotPayloadConversationEntryTransformed] = []
         current_entry: CopilotPayloadConversationEntryTransformed | None = None
-        is_inside_code_block = False
-        code_block_index = -1
 
         for idx, entry in enumerate(self.wcm.conversation):
-            kind = entry["kind"]
-            reply = entry["reply"]
-            turn_id = entry["turnId"]
+            if current_entry and current_entry["kind"] == entry["kind"] and current_entry["turnId"] == entry["turnId"]:
+                current_entry["messages"].append(entry["reply"])
+                current_entry["warnings"].extend(entry.get("warnings", []))
+                continue
 
-            if current_entry and current_entry["kind"] == kind:
-                if reply.startswith("```"):
-                    is_inside_code_block = not is_inside_code_block
-                    if is_inside_code_block:
-                        code_block_index += 1
-                        current_entry["codeBlockIndices"].append(code_block_index)
-                        reply = inject_code_block_commands(reply, code_block_index)
-                    else:
-                        self.wcm.insert_code_block_index(code_block_index, "".join(current_entry["codeBlocks"]))
-                        current_entry["codeBlocks"] = []
-                elif is_inside_code_block:
-                    current_entry["codeBlocks"].append(reply)
-                current_entry["messages"].append(reply)
-                if warnings := entry.get("warnings"):
-                    current_entry["warnings"].extend(warnings)
-            else:
-                if current_entry:
-                    transformed_conversation.append(current_entry)
-                current_entry = {
-                    "kind": kind,
-                    "turnId": turn_id,
-                    "messages": [reply],
-                    "codeBlockIndices": [],
-                    "codeBlocks": [],
-                    "references": [],
-                    "warnings": entry.get("warnings", []),
-                }
-                if kind == "report":
-                    current_entry["references"] = self.wcm.conversation[idx - 1].get("references", [])
-
-                if reply.startswith("```") and kind == "report":
-                    is_inside_code_block = True
-                    code_block_index += 1
-                    current_entry["codeBlockIndices"].append(code_block_index)
-                    reply = inject_code_block_commands(reply, code_block_index)
-                    current_entry["messages"] = [reply]
+            if current_entry:
+                transformed_conversation.append(current_entry)
+            current_entry = {
+                "kind": entry["kind"],
+                "turnId": entry["turnId"],
+                "messages": [entry["reply"]],
+                "codeBlockIndices": [],
+                # a reply's references are those sent along with the request, i.e. the user turn before it
+                "references": self.wcm.conversation[idx - 1].get("references", [])
+                if entry["kind"] == "report" and idx > 0
+                else [],
+                "warnings": list(entry.get("warnings", [])),
+            }
 
         if current_entry:
-            # Fixes: https://github.com/TerminalFi/LSP-copilot/issues/187
-            if is_inside_code_block:
-                current_entry["messages"].append("```")
             transformed_conversation.append(current_entry)
+
+        # Code blocks are parsed on the assembled text of each turn rather than on the streaming
+        # chunks it's made of, because a chunk boundary doesn't align with a line boundary.
+        code_blocks: dict[str, str] = {}
+        last_index = -1
+        for transformed_entry in transformed_conversation:
+            message, indices, blocks, last_index = inject_code_block_commands(
+                "".join(transformed_entry["messages"]), last_index
+            )
+            transformed_entry["messages"] = [message]
+            transformed_entry["codeBlockIndices"] = indices
+            code_blocks.update(blocks)
+        self.wcm.code_block_index = code_blocks
 
         return transformed_conversation
 
