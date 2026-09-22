@@ -23,7 +23,6 @@ from functools import partial, wraps
 from pathlib import Path
 from typing import Any, Literal, Sequence, cast
 
-import mdpopups
 import sublime
 import sublime_plugin
 from LSP.plugin import Request, Session
@@ -35,7 +34,6 @@ from lsp_utils.helpers import rmtree_ex
 from .client import CopilotPlugin
 from .constants import (
     COPILOT_OUTPUT_PANEL_PREFIX,
-    PACKAGE_NAME,
     REQ_CHECK_STATUS,
     REQ_CONVERSATION_AGENTS,
     REQ_CONVERSATION_CREATE,
@@ -153,7 +151,6 @@ class CopilotPrepareAndEditSettingsCommand(sublime_plugin.ApplicationCommand):
 
 
 class BaseCopilotCommand(ABC):
-    session_name = PACKAGE_NAME
     requirement = REQUIRE_SIGN_IN | REQUIRE_AUTHORIZED
 
     def _can_meet_requirement(self, session: Session) -> bool:
@@ -453,19 +450,8 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
         for i, item in enumerate(self.items):
             insert_text = item.get("insertText", "")
 
-            # Create preview using mdpopups to convert markdown to HTML
             if insert_text:
-                # Detect language for syntax highlighting
-                # This is a simple heuristic - you might want to improve this
-                language = self._detect_language(insert_text)
-                markdown_text = f"```{language}\n{insert_text}\n```"
-
-                # Convert markdown to HTML using mdpopups
-                try:
-                    html_details = mdpopups.md2html(None, markdown_text)
-                except Exception:
-                    # Fallback to plain text if markdown conversion fails
-                    html_details = f"<pre>{insert_text}</pre>"
+                html_details = f"<pre>{insert_text}</pre>"
 
                 # Create a short preview for the main text
                 preview = insert_text.strip().split("\n")[0]
@@ -493,33 +479,6 @@ class CopilotInlineCompletionInputHandler(sublime_plugin.ListInputHandler):
                 )
 
         return list_items
-
-    def _detect_language(self, text: str) -> str:
-        """Simple language detection based on content."""
-        text_lower = text.lower().strip()
-
-        # Python
-        if any(keyword in text_lower for keyword in ["def ", "import ", "from ", "class ", "if __name__"]):
-            return "python"
-
-        # JavaScript/TypeScript
-        if any(keyword in text_lower for keyword in ["function ", "const ", "let ", "var ", "=>", "console.log"]):
-            return "javascript"
-
-        # HTML
-        if text_lower.startswith("<") and ">" in text_lower:
-            return "html"
-
-        # CSS
-        if "{" in text and "}" in text and ":" in text:
-            return "css"
-
-        # JSON
-        if text.strip().startswith("{") and text.strip().endswith("}"):
-            return "json"
-
-        # Default to text
-        return "text"
 
 
 class CopilotAcceptPanelCompletionShimCommand(CopilotWindowCommand):
@@ -610,6 +569,54 @@ class CopilotConversationChatCommand(CopilotTextCommand):
         payload: CopilotPayloadConversationPreconditions,
         initial_message: str,
     ) -> None:
+        if not self.view.window():
+            return
+
+        session.send_request(
+            Request(REQ_COPILOT_MODELS, {}),
+            lambda models: self._on_result_copilot_models_for_create(plugin, session, models, initial_message),
+        )
+
+    def _on_result_copilot_models_for_create(
+        self,
+        plugin: CopilotPlugin,
+        session: Session,
+        models: list[CopilotModel],
+        initial_message: str,
+    ) -> None:
+        if not (window := self.view.window()):
+            return
+
+        chat_models = [model for model in models if "chat-panel" in model["scopes"]]
+        if not chat_models:
+            status_message("No chat models available", icon="❌")
+            return
+
+        default_index = next((i for i, model in enumerate(chat_models) if model["isChatDefault"]), 0)
+        window.show_quick_panel(
+            [
+                sublime.QuickPanelItem(
+                    trigger=model["modelName"],
+                    details=model["modelFamily"],
+                    annotation="Default" if model["isChatDefault"] else "",
+                )
+                for model in chat_models
+            ],
+            lambda index: self._on_result_model_selected(plugin, session, chat_models, index, initial_message),
+            selected_index=default_index,
+            placeholder="Select a model for this conversation",
+        )
+
+    def _on_result_model_selected(
+        self,
+        plugin: CopilotPlugin,
+        session: Session,
+        models: list[CopilotModel],
+        index: int,
+        initial_message: str,
+    ) -> None:
+        if index == -1:
+            return
         if not (window := self.view.window()):
             return
 
@@ -630,6 +637,7 @@ class CopilotConversationChatCommand(CopilotTextCommand):
                 "hideText": False,
                 "warnings": [],
             })
+        wcm.model_id = models[index]["id"]
         req_params: dict[str, Any] = {
             "turns": [{"request": msg}],
             "capabilities": {
@@ -639,6 +647,7 @@ class CopilotConversationChatCommand(CopilotTextCommand):
             "workDoneToken": f"copilot_chat://{window.id()}",
             "computeSuggestions": True,
             "source": "panel",
+            "modelInfo": {"id": wcm.model_id},
         }
         session.send_request(
             Request(REQ_CONVERSATION_CREATE, req_params),
@@ -675,7 +684,11 @@ class CopilotConversationChatCommand(CopilotTextCommand):
         user_prompts: list[CopilotUserDefinedPromptTemplates] = session.config.settings.get("prompts") or []
         is_template, msg = preprocess_chat_message(view, msg, user_prompts)
         views = [sv.view for sv in session.session_views_async() if sv.view.id() != view.id()]
-        if not (request := prepare_conversation_turn_request(wcm.conversation_id, wcm.window.id(), msg, view, views)):
+        if not (
+            request := prepare_conversation_turn_request(
+                wcm.conversation_id, wcm.window.id(), msg, view, views, wcm.model_id
+            )
+        ):
             return
 
         wcm.append_conversation_entry({
@@ -891,9 +904,11 @@ class CopilotConversationCopyCodeCommand(CopilotWindowCommand):
 
         wcm = WindowConversationManager(window)
         if not (code := wcm.code_block_index.get(str(code_block_index), None)):
+            status_message(f"Failed to find code based on index. {code_block_index}")
             return
 
         sublime.set_clipboard(code)
+        status_message("Code block copied.", icon="✔")
 
 
 class CopilotConversationInsertCodeShimCommand(CopilotWindowCommand):
@@ -1012,6 +1027,10 @@ class CopilotModelsCommand(CopilotTextCommand):
 
     def _on_result_copilot_models(self, payload: list[CopilotModel]) -> None:
         window = self.view.window() or sublime.active_window()
+        models = [item for item in payload if "modelPolicy" in item]
+        if not models:
+            status_message("No policy-configurable models available", icon="❌")
+            return
         window.show_quick_panel(
             [
                 sublime.QuickPanelItem(
@@ -1019,16 +1038,16 @@ class CopilotModelsCommand(CopilotTextCommand):
                     details=item["modelName"],
                     annotation=", ".join(item["scopes"]),
                 )
-                for item in payload
+                for item in models
             ],
-            lambda index: self._set_model_policy(index, payload),
+            lambda index: self._set_model_policy(index, models),
         )
 
     def _set_model_policy(self, index: int, models: list[CopilotModel]) -> None:
         if index == -1:
             return
-        model_name = models[index]["modelFamily"]
-        self.view.run_command("copilot_set_model_policy", {"model": model_name, "status": "enabled"})
+        model_id = models[index]["id"]
+        self.view.run_command("copilot_set_model_policy", {"model": model_id, "status": "enabled"})
 
 
 class CopilotCodeReviewCommand(CopilotTextCommand):

@@ -64,7 +64,7 @@ class ViewEventListener(sublime_plugin.ViewEventListener):
     def on_activated_async(self) -> None:
         self.view.run_command("lsp_check_applicable", {"session_name": PACKAGE_NAME})
         _, session = CopilotPlugin.plugin_session(self.view)
-        if session and CopilotPlugin.is_applicable(self.view, session.config):
+        if session and not ((window := self.view.window()) and CopilotIgnore(window).trigger(self.view)):
             if (window := self.view.window()) and self.view.name() != "Copilot Chat":
                 WindowConversationManager(window).last_active_view_id = self.view.id()
 

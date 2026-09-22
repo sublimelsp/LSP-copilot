@@ -239,7 +239,6 @@ class _PopupCompletion(_BaseCompletion):
             view=self.view,
             content=self.popup_content,
             md=True,
-            layout=sublime.LAYOUT_INLINE,
             flags=sublime.COOPERATE_WITH_AUTO_COMPLETE,
             max_width=640,
         )

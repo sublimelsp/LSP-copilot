@@ -59,6 +59,7 @@ ignore = [
 ]
 stubPath = 'typings'
 pythonVersion = '3.8'
+typeCheckingMode = 'standard'
 
 [tool.ruff]
 preview = true
