@@ -4,6 +4,7 @@ import asyncio
 import re
 import threading
 from collections.abc import Iterable
+from functools import partial
 from typing import Any, final
 
 import sublime
@@ -208,8 +209,12 @@ class CopilotFileWatcher:
                 continue
             for window in all_windows():
                 if any(path.startswith(folder) for folder in window.folders()):
-                    sublime.set_timeout_async(lambda w=window: CopilotIgnore(w).load_patterns())
+                    sublime.set_timeout_async(partial(self._reload_ignore_patterns, window))
                     return
+
+    @staticmethod
+    def _reload_ignore_patterns(window: sublime.Window) -> None:
+        CopilotIgnore(window).load_patterns()
 
     def add_folders(self, folders: Iterable[str]) -> None:
         print(f"[😀 add_folders] Starting file watcher for folders: {self._folders}")
