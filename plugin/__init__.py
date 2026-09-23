@@ -51,7 +51,7 @@ from .commands import (
 )
 from .constants import SERVER_VERSION
 from .helpers import CopilotIgnore
-from .listeners import EventListener, ViewEventListener, copilot_ignore_observer
+from .listeners import EventListener, ViewEventListener, copilot_file_watcher
 from .utils import all_windows
 from .version_manager import version_manager
 
@@ -119,7 +119,7 @@ def plugin_loaded() -> None:
     version_manager.server_version = SERVER_VERSION
 
     CopilotPlugin.register()
-    copilot_ignore_observer.setup()
+    copilot_file_watcher.setup()
     for window in all_windows():
         CopilotIgnore(window).load_patterns()
 
@@ -128,5 +128,5 @@ def plugin_unloaded() -> None:
     """Executed when this plugin is unloaded."""
     CopilotPlugin.cleanup()
     CopilotIgnore.cleanup()
-    copilot_ignore_observer.cleanup()
+    copilot_file_watcher.cleanup()
     CopilotPlugin.unregister()

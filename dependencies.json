@@ -1,6 +1,7 @@
 {
     "*": {
-        "*": [
+        ">=4203": [
+            "anyio",
             "bracex",
             "charset-normalizer",
             "idna",
@@ -12,7 +13,26 @@
             "requests",
             "sublime_lib",
             "urllib3",
-            "watchdog",
+            "watchfiles",
+            "wcmatch"
+        ],
+        "<4203": [
+            "anyio",
+            "bracex",
+            "charset-normalizer",
+            "exceptiongroup",
+            "idna",
+            "Jinja2",
+            "jmespath",
+            "lsp_utils",
+            "markupsafe",
+            "more-itertools",
+            "requests",
+            "sniffio",
+            "sublime_lib",
+            "typing-extensions",
+            "urllib3",
+            "watchfiles",
             "wcmatch"
         ]
     }
