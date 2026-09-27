@@ -204,7 +204,6 @@ class CopilotFileWatcher:
 
     def _on_changes(self, changes: set[tuple[Change, str]]) -> None:
         for _change, path in changes:
-            print(f"[😀] Detected change in: {_change = } ; {path = }")
             if not path.endswith(".copilotignore"):
                 continue
             for window in all_windows():
@@ -217,7 +216,6 @@ class CopilotFileWatcher:
         CopilotIgnore(window).load_patterns()
 
     def add_folders(self, folders: Iterable[str]) -> None:
-        print(f"[😀 add_folders] Starting file watcher for folders: {self._folders}")
         changed = False
         for folder in folders:
             if folder not in self._folders:
@@ -227,7 +225,6 @@ class CopilotFileWatcher:
             self._restart()
 
     def remove_folders(self, folders: list[str]) -> None:
-        print(f"[😀 remove_folders] Starting file watcher for folders: {self._folders}")
         changed = False
         for folder in folders:
             if folder in self._folders:
