@@ -7,6 +7,11 @@ GitHub Copilot support for Sublime Text LSP plugin provided through [@github/cop
 This plugin uses [Copilot][] distribution which uses OpenAI Codex to suggest codes
 and entire functions in real-time right from your editor.
 
+## ⚠ Legacy Branch
+
+This branch is a legacy branch which is created just for legacy py38 plugin host.
+It will no longer receive new features.
+
 ## Features
 
 - [x] Inline completion popup.
