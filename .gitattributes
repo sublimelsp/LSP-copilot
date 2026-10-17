@@ -1,3 +1,4 @@
+/.copilotignore export-ignore
 .dependabot export-ignore
 .editorconfig export-ignore
 .flake8 export-ignore
@@ -8,10 +9,10 @@
 .markdownlintrc export-ignore
 .style.yapf export-ignore
 .travis.yml export-ignore
-codecov.yml export-ignore
-docs/ export-ignore
 Makefile export-ignore
 Makefile.* export-ignore
+codecov.yml export-ignore
+docs/ export-ignore
 mkdocs.yml export-ignore
 mypy.ini export-ignore
 pyproject.toml export-ignore
