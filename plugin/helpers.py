@@ -158,7 +158,7 @@ class CopilotIgnore:
     def read_ignore_patterns(self, file_path: str) -> list[str]:
         if os.path.isfile(file_path):
             with open(file_path, encoding="utf-8") as f:
-                return list(drop_falsy(map(str.strip, f)))
+                return [p for p in drop_falsy(map(str.strip, f)) if not p.startswith("#")]
         return []
 
     def add_patterns_from_file(self, file_path: str, folder: str) -> None:
@@ -178,7 +178,10 @@ class CopilotIgnore:
                 relative_path = file_path.relative_to(folder).as_posix()
             except ValueError:
                 continue
-            if glob.globmatch(relative_path, patterns, flags=glob.GLOBSTAR):
+            # A `!pattern` line re-includes a file. With only `!` lines there is nothing to ignore.
+            if any(not p.startswith("!") for p in patterns) and glob.globmatch(
+                relative_path, patterns, flags=glob.GLOBSTAR | glob.NEGATE
+            ):
                 return True
         return False
 
