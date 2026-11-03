@@ -6,7 +6,8 @@ import uuid
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import wraps
+from functools import partial, wraps
+from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -22,6 +23,7 @@ from LSP.plugin import (
     notification_handler,
     request_handler,
 )
+from lsp_utils import InstallDirectory, download_and_extract_github_asset, select_platform_asset
 from typing_extensions import override
 
 from .constants import (
@@ -47,6 +49,10 @@ from .constants import (
     REQ_GET_COMPLETIONS_CYCLING,
     REQ_GET_PANEL_COMPLETIONS,
     REQ_NOTIFY_SHOWN,
+    SERVER_ASSETS,
+    SERVER_BINARY,
+    SERVER_REPO,
+    SERVER_VERSION,
 )
 from .helpers import (
     ActivityIndicator,
@@ -86,7 +92,6 @@ from .utils import (
     get_session_setting,
     status_message,
 )
-from .version_manager import version_manager
 
 WindowId = int
 
@@ -169,8 +174,7 @@ class CopilotPlugin(LspPlugin):
     @override
     @classmethod
     def on_pre_start_async(cls, context: OnPreStartContext) -> None:
-        if not version_manager.is_installed:
-            version_manager.install_server()
+        server_path = cls._install_server()
 
         if window := context.view.window():
             cls.window_attrs.setdefault(window, WindowAttr())
@@ -202,7 +206,28 @@ class CopilotPlugin(LspPlugin):
             editor_info["networkProxy"] = network_proxy
 
         context.configuration.initialization_options.update(editor_info)
-        context.variables["server_path"] = str(version_manager.server_path)
+        context.variables["server_path"] = str(server_path)
+
+    @classmethod
+    def _install_server(cls) -> Path:
+        """Installs the server, unless already installed, and returns the path of its executable."""
+        install_dir = InstallDirectory(
+            cls.plugin_storage_path,
+            "server",
+            SERVER_VERSION,
+            # unversioned directories (named "v{version}") used by previous releases
+            legacy_dirs=list(cls.plugin_storage_path.glob("v[0-9]*")),
+        )
+        server_dir = install_dir.install(
+            partial(
+                download_and_extract_github_asset,
+                SERVER_REPO,
+                SERVER_VERSION,
+                select_platform_asset(SERVER_ASSETS),
+                executables=[SERVER_BINARY],
+            )
+        )
+        return server_dir / SERVER_BINARY
 
     @override
     def on_initialized_async(self) -> None:
@@ -291,7 +316,7 @@ class CopilotPlugin(LspPlugin):
 
         variables: dict[str, Any] = {
             "client_version": self.get_version(),
-            "server_version": version_manager.server_version,
+            "server_version": SERVER_VERSION,
             "server_status_message": self._server_status_message,
             "server_status_kind": self._server_status_kind,
         }

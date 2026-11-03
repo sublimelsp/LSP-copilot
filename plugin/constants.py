@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 import sublime
+from lsp_utils import PlatformAssets
 
 assert __package__
 
 PACKAGE_NAME = __package__.partition(".")[0]
-PLATFORM_ARCH = f"{sublime.platform()}_{sublime.arch()}"
 
 SERVER_VERSION = "1.552.0"
 """The server tag. You can find them on https://github.com/github/copilot-language-server-release/releases"""
+SERVER_REPO = "github/copilot-language-server-release"
+SERVER_ASSETS: PlatformAssets = {
+    "linux-arm64": f"copilot-language-server-linux-arm64-{SERVER_VERSION}.zip",
+    "linux-x64": f"copilot-language-server-linux-x64-{SERVER_VERSION}.zip",
+    "osx-arm64": f"copilot-language-server-darwin-arm64-{SERVER_VERSION}.zip",
+    "osx-x64": f"copilot-language-server-darwin-x64-{SERVER_VERSION}.zip",
+    "windows-arm64": f"copilot-language-server-win32-arm64-{SERVER_VERSION}.zip",
+    "windows-x64": f"copilot-language-server-win32-x64-{SERVER_VERSION}.zip",
+}
+"""Release assets of the server by `<platform>-<arch>`."""
+SERVER_BINARY = "copilot-language-server.exe" if sublime.platform() == "windows" else "copilot-language-server"
+"""The relative path of the server executable in the release asset."""
 
 # ---------------- #
 # Setting prefixes #
