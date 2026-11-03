@@ -7,9 +7,10 @@ import shlex
 import subprocess
 import threading
 import time
+from collections.abc import Callable, Sequence
 from operator import itemgetter
 from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, cast
+from typing import Any, Literal, cast
 
 import requests
 import sublime
@@ -362,7 +363,7 @@ class GitHelper:
         )
         try:
             stdout, stderr = result.communicate(timeout=10)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        except subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError:
             return None
         if result.returncode != 0:
             log_error(f"Git command failed: {shlex.join(cmd)}; Error: {stderr.strip()}")
@@ -401,7 +402,7 @@ class GitHelper:
                     if full_path.is_file() and full_path.stat().st_size < 10000:  # Only read files < 10KB
                         content = full_path.read_text(encoding="utf-8", errors="ignore")
                         untracked_content.append(f"=== NEW FILE: {file_path} ===\n{content}")
-                except (OSError, UnicodeDecodeError):
+                except OSError, UnicodeDecodeError:
                     untracked_content.append(f"=== NEW FILE: {file_path} ===\n[Binary or unreadable file]")
 
             if untracked_content:

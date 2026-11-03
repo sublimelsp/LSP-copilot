@@ -3,14 +3,14 @@ name = "lsp-copilot"
 version = "0.0.0"
 description = "GitHub Copilot support for Sublime Text LSP plugin provided through Copilot.vim."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.14"
 dependencies = [
   "jinja2==3.*",
   "jmespath>=1,<2",
   "more-itertools>=10,<11",
   "requests>=2,<3",
   "typing-extensions>=4.12",
-  "watchfiles==0.24.0",
+  "watchfiles>=1.1",
   "wcmatch>=10,<11",
 ]
 
@@ -30,7 +30,7 @@ default-groups = ["dev"]
 check_untyped_defs = true
 strict_optional = true
 mypy_path = 'typings:stubs'
-python_version = '3.8'
+python_version = '3.14'
 
 [[tool.mypy.overrides]]
 module = [
@@ -58,13 +58,13 @@ ignore = [
   '**/libs',
 ]
 stubPath = 'typings'
-pythonVersion = '3.8'
+pythonVersion = '3.14'
 typeCheckingMode = 'standard'
 
 [tool.ruff]
 preview = true
 line-length = 120
-target-version = 'py38'
+target-version = 'py314'
 exclude = [
   "*/libs/*",
   ".git",

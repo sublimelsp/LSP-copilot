@@ -18,10 +18,10 @@ import os
 import urllib.parse
 import uuid
 from abc import ABC
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from functools import partial, wraps
 from pathlib import Path
-from typing import Any, Literal, Sequence, cast
+from typing import Any, Literal, cast
 
 import sublime
 import sublime_plugin

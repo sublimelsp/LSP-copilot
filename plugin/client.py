@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, cast
+from typing import Any, cast, override
 from urllib.parse import urlparse
 
 import sublime
@@ -22,7 +22,6 @@ from LSP.plugin import (
     notification_handler,
     request_handler,
 )
-from typing_extensions import override
 
 from .constants import (
     EDIT_STATUS_BEGIN,
