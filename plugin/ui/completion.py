@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import textwrap
 from abc import ABC, abstractmethod
-from typing import Sequence
+from collections.abc import Sequence
 
 import mdpopups
 import sublime

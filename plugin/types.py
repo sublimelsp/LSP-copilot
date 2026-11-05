@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Tuple, TypeVar, TypedDict
+from typing import Any, Literal, NotRequired, TypeVar, TypedDict
 
 from LSP.plugin.core.protocol import Position as LspPosition, Range as LspRange
 from LSP.plugin.core.typing import StrEnum
-from typing_extensions import NotRequired
 
 T_Callable = TypeVar("T_Callable", bound=Callable[..., Any])
 
@@ -31,7 +31,7 @@ class EnhancedStrEnum(StrEnum):
 # ---------------------------- #
 
 StPoint = int
-StRegion = Tuple[StPoint, StPoint]
+StRegion = tuple[StPoint, StPoint]
 
 
 class StLayout(TypedDict, total=True):
