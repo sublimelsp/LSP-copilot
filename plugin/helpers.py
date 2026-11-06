@@ -14,8 +14,7 @@ from typing import Any, Literal, cast
 
 import requests
 import sublime
-from LSP.plugin import position_to_offset, range_to_region, region_to_range
-from LSP.plugin.core.url import view_to_uri
+from LSP.plugin import filename_to_uri, position_to_offset, range_to_region, region_to_range
 from LSP.protocol import Position as LspPosition
 from more_itertools import duplicates_everseen, first, first_true
 from wcmatch import glob
@@ -189,6 +188,12 @@ class CopilotIgnore:
         if self.patterns and (file := view.file_name()):
             return self.matches_any_pattern(file)
         return False
+
+
+def view_to_uri(view: sublime.View) -> str:
+    if file_name := view.file_name():
+        return filename_to_uri(file_name)
+    return f"buffer:{view.buffer_id()}"
 
 
 def st_point_to_lsp_position(point: int, view: sublime.View) -> LspPosition:
