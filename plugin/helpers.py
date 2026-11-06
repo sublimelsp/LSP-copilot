@@ -14,9 +14,8 @@ from typing import Any, Literal, cast
 
 import requests
 import sublime
-from LSP.plugin import position_to_offset, region_to_range
+from LSP.plugin import position_to_offset, range_to_region, region_to_range
 from LSP.plugin.core.url import view_to_uri
-from LSP.plugin.core.views import range_to_region
 from LSP.protocol import Position as LspPosition
 from more_itertools import duplicates_everseen, first, first_true
 from wcmatch import glob
@@ -336,13 +335,13 @@ def preprocess_completions(view: sublime.View, completions: list[CopilotPayloadC
     # inject extra information for convenience
     for completion in completions:
         completion["point"] = position_to_offset(view, completion["position"])
-        completion["region"] = range_to_region(completion["range"], view).to_tuple()
+        completion["region"] = range_to_region(view, completion["range"]).to_tuple()
 
 
 def preprocess_panel_completions(view: sublime.View, completions: Sequence[CopilotPayloadPanelSolution]) -> None:
     """Preprocess the `completions` from "getCompletionsCycling" request."""
     for completion in completions:
-        completion["region"] = range_to_region(completion["range"], view).to_tuple()
+        completion["region"] = range_to_region(view, completion["range"]).to_tuple()
 
 
 def is_debug_mode() -> bool:

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, IO, TypeVar, Union, cast
 
 import sublime
-from LSP.plugin.core.sessions import Session
+from LSP.plugin import Session
 from LSP.plugin.core.types import basescope2languageid
 from more_itertools import first, first_true
 
