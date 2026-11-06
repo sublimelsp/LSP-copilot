@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Literal, NotRequired, TypeVar, TypedDict
 
-from LSP.plugin.core.protocol import Position as LspPosition, Range as LspRange
-from LSP.plugin.core.typing import StrEnum
+from LSP.protocol import Position as LspPosition, Range as LspRange
 
 T_Callable = TypeVar("T_Callable", bound=Callable[..., Any])
 
