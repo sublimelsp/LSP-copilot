@@ -49,11 +49,9 @@ from .commands import (
     CopilotSignOutCommand,
     CopilotToggleConversationChatCommand,
 )
-from .constants import SERVER_VERSION
 from .helpers import CopilotIgnore
 from .listeners import EventListener, ViewEventListener, copilot_file_watcher
 from .utils import all_windows
-from .version_manager import version_manager
 
 __all__ = (
     # ST: core
@@ -115,9 +113,6 @@ __all__ = (
 
 def plugin_loaded() -> None:
     """Executed when this plugin is loaded."""
-    version_manager.plugin_storage_dir = CopilotPlugin.plugin_storage_path
-    version_manager.server_version = SERVER_VERSION
-
     CopilotPlugin.register()
     copilot_file_watcher.setup()
     for window in all_windows():
