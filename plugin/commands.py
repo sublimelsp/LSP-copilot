@@ -25,8 +25,7 @@ from typing import Any, Literal, cast
 
 import sublime
 import sublime_plugin
-from LSP.plugin import LspTextCommand, LspWindowCommand, Request, Session, filename_to_uri
-from LSP.plugin.core.protocol import ResponseError
+from LSP.plugin import LspTextCommand, LspWindowCommand, Request, ResponseError, Session, filename_to_uri
 from lsp_utils.helpers import rmtree_ex
 
 from .client import CopilotPlugin
