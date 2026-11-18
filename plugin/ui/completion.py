@@ -120,11 +120,31 @@ class ViewCompletionManager:
 
         self.hide()
 
-    def handle_text_change(self) -> None:
+    def handle_text_change(self) -> bool:
         if not (self.is_phantom and self.is_visible):
-            return
+            return False
 
-        self.hide()
+        if self.current_completion and len(self.view.sel()) == 1 and self.view.sel()[0].empty():
+            current_completion = self.current_completion
+            point = self.view.sel()[0].begin()
+            region = sublime.Region(current_completion["point"], point)
+            text = self.view.substr(region)
+
+            if current_completion["displayText"].startswith(text):
+                current_completion["displayText"] = current_completion["displayText"][len(region) :]
+                self.completion_style_type(
+                    self.view, current_completion, self.completion_index, len(self.completions)
+                ).show()
+
+                return True
+            else:
+                self.hide()
+
+                return False
+        else:
+            self.hide()
+
+            return False
 
     def handle_close(self) -> None:
         if not self.is_phantom:
