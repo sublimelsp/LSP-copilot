@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from .types import T_Callable
 from .utils import is_active_view

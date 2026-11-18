@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from functools import lru_cache
-from typing import Iterable
 
 import jinja2
 import sublime
-from LSP.plugin.core.url import parse_uri
+from LSP.plugin import parse_uri
 
 from .constants import PACKAGE_NAME
 from .helpers import is_debug_mode

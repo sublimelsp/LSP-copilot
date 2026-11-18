@@ -18,17 +18,15 @@ import os
 import urllib.parse
 import uuid
 from abc import ABC
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from functools import partial, wraps
 from pathlib import Path
-from typing import Any, Literal, Sequence, cast
+from typing import Any, Literal, cast
 
 import sublime
 import sublime_plugin
-from LSP.plugin import Request, Session
+from LSP.plugin import LspTextCommand, LspWindowCommand, Request, Session, filename_to_uri
 from LSP.plugin.core.protocol import ResponseError
-from LSP.plugin.core.registry import LspTextCommand, LspWindowCommand
-from LSP.plugin.core.url import filename_to_uri
 from lsp_utils.helpers import rmtree_ex
 
 from .client import CopilotPlugin

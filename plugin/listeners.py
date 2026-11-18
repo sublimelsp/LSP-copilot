@@ -5,11 +5,10 @@ import re
 import threading
 from collections.abc import Iterable
 from functools import partial
-from typing import Any, final
+from typing import Any, final, override
 
 import sublime
 import sublime_plugin
-from typing_extensions import override
 from watchfiles import Change, awatch
 
 from .client import CopilotPlugin

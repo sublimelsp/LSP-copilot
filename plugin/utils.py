@@ -4,13 +4,13 @@ import contextlib
 import os
 import sys
 import threading
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from functools import wraps
 from pathlib import Path
-from typing import Any, Mapping, Sequence, TypeVar, Union, cast
+from typing import Any, TypeVar, Union, cast
 
 import sublime
-from LSP.plugin.core.sessions import Session
+from LSP.plugin import Session
 from LSP.plugin.core.types import basescope2languageid
 from more_itertools import first, first_true
 
@@ -20,12 +20,12 @@ from .types import T_Callable
 _T = TypeVar("_T")
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
-_T_Number = TypeVar("_T_Number", bound=Union[int, float])
+_T_Number = TypeVar("_T_Number", bound=int | float)
 
 PathLike = Union[Path, str]
 
 
-def all_windows() -> Generator[sublime.Window, None, None]:
+def all_windows() -> Generator[sublime.Window]:
     yield from sublime.windows()  # just to unify the return type with other `all_*` functions
 
 
@@ -33,7 +33,7 @@ def all_views(
     window: sublime.Window | None = None,
     *,
     include_transient: bool = False,
-) -> Generator[sublime.View, None, None]:
+) -> Generator[sublime.View]:
     windows: Iterable[sublime.Window] = (window,) if window else all_windows()
     for window in windows:
         yield from window.views(include_transient=include_transient)
@@ -43,7 +43,7 @@ def all_sheets(
     window: sublime.Window | None = None,
     *,
     include_transient: bool = False,
-) -> Generator[sublime.Sheet, None, None]:
+) -> Generator[sublime.Sheet]:
     windows: Iterable[sublime.Window] = (window,) if window else all_windows()
     for window in windows:
         if include_transient:
@@ -89,7 +89,7 @@ def debounce(time_s: float = 0.3) -> Callable[[T_Callable], T_Callable]:
     return decorator
 
 
-def drop_falsy(iterable: Iterable[_T | None]) -> Generator[_T, None, None]:
+def drop_falsy(iterable: Iterable[_T | None]) -> Generator[_T]:
     """Drops falsy values from the iterable."""
     yield from filter(None, iterable)
 
@@ -184,7 +184,7 @@ def message_dialog(msg: str, *, error: bool = False, console: bool = False) -> N
 
 
 @contextlib.contextmanager
-def mutable_view(view: sublime.View) -> Generator[sublime.View, Any, None]:
+def mutable_view(view: sublime.View) -> Generator[sublime.View, Any]:
     try:
         view.set_read_only(False)
         yield view
@@ -208,7 +208,7 @@ else:
 
     def remove_prefix(s: str, prefix: str) -> str:
         """Remove the prefix from the string. I.e., `str.removeprefix` in Python 3.9."""
-        return s[len(prefix) :] if s.startswith(prefix) else s
+        return s.removeprefix(prefix)
 
     def remove_suffix(s: str, suffix: str) -> str:
         """Remove the suffix from the string. I.e., `str.removesuffix` in Python 3.9."""

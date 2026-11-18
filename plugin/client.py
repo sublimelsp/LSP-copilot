@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial, wraps
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, override
 from urllib.parse import urlparse
 
 import sublime
@@ -24,7 +24,6 @@ from LSP.plugin import (
     request_handler,
 )
 from lsp_utils import InstallDirectory, download_and_extract_github_asset, select_platform_asset
-from typing_extensions import override
 
 from .constants import (
     EDIT_STATUS_BEGIN,

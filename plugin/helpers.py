@@ -7,15 +7,14 @@ import shlex
 import subprocess
 import threading
 import time
+from collections.abc import Callable, Sequence
 from operator import itemgetter
 from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, cast
+from typing import Any, Literal, cast
 
 import requests
 import sublime
-from LSP.plugin import position_to_offset, region_to_range
-from LSP.plugin.core.url import view_to_uri
-from LSP.plugin.core.views import range_to_region
+from LSP.plugin import filename_to_uri, position_to_offset, range_to_region, region_to_range
 from LSP.protocol import Position as LspPosition
 from more_itertools import duplicates_everseen, first, first_true
 from wcmatch import glob
@@ -158,7 +157,7 @@ class CopilotIgnore:
     def read_ignore_patterns(self, file_path: str) -> list[str]:
         if os.path.isfile(file_path):
             with open(file_path, encoding="utf-8") as f:
-                return list(drop_falsy(map(str.strip, f)))
+                return [p for p in drop_falsy(map(str.strip, f)) if not p.startswith("#")]
         return []
 
     def add_patterns_from_file(self, file_path: str, folder: str) -> None:
@@ -178,7 +177,10 @@ class CopilotIgnore:
                 relative_path = file_path.relative_to(folder).as_posix()
             except ValueError:
                 continue
-            if glob.globmatch(relative_path, patterns, flags=glob.GLOBSTAR):
+            # A `!pattern` line re-includes a file. With only `!` lines there is nothing to ignore.
+            if any(not p.startswith("!") for p in patterns) and glob.globmatch(
+                relative_path, patterns, flags=glob.GLOBSTAR | glob.NEGATE
+            ):
                 return True
         return False
 
@@ -186,6 +188,12 @@ class CopilotIgnore:
         if self.patterns and (file := view.file_name()):
             return self.matches_any_pattern(file)
         return False
+
+
+def view_to_uri(view: sublime.View) -> str:
+    if file_name := view.file_name():
+        return filename_to_uri(file_name)
+    return f"buffer:{view.buffer_id()}"
 
 
 def st_point_to_lsp_position(point: int, view: sublime.View) -> LspPosition:
@@ -332,13 +340,13 @@ def preprocess_completions(view: sublime.View, completions: list[CopilotPayloadC
     # inject extra information for convenience
     for completion in completions:
         completion["point"] = position_to_offset(view, completion["position"])
-        completion["region"] = range_to_region(completion["range"], view).to_tuple()
+        completion["region"] = range_to_region(view, completion["range"]).to_tuple()
 
 
 def preprocess_panel_completions(view: sublime.View, completions: Sequence[CopilotPayloadPanelSolution]) -> None:
     """Preprocess the `completions` from "getCompletionsCycling" request."""
     for completion in completions:
-        completion["region"] = range_to_region(completion["range"], view).to_tuple()
+        completion["region"] = range_to_region(view, completion["range"]).to_tuple()
 
 
 def is_debug_mode() -> bool:
@@ -362,7 +370,7 @@ class GitHelper:
         )
         try:
             stdout, stderr = result.communicate(timeout=10)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        except subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError:
             return None
         if result.returncode != 0:
             log_error(f"Git command failed: {shlex.join(cmd)}; Error: {stderr.strip()}")
@@ -401,7 +409,7 @@ class GitHelper:
                     if full_path.is_file() and full_path.stat().st_size < 10000:  # Only read files < 10KB
                         content = full_path.read_text(encoding="utf-8", errors="ignore")
                         untracked_content.append(f"=== NEW FILE: {file_path} ===\n{content}")
-                except (OSError, UnicodeDecodeError):
+                except OSError, UnicodeDecodeError:
                     untracked_content.append(f"=== NEW FILE: {file_path} ===\n[Binary or unreadable file]")
 
             if untracked_content:
