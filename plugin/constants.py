@@ -7,7 +7,7 @@ assert __package__
 
 PACKAGE_NAME = __package__.partition(".")[0]
 
-SERVER_VERSION = "1.552.0"
+SERVER_VERSION = "1.575.0"
 """The server tag. You can find them on https://github.com/github/copilot-language-server-release/releases"""
 SERVER_REPO = "github/copilot-language-server-release"
 SERVER_ASSETS: PlatformAssets = {
